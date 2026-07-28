@@ -44,19 +44,49 @@ def handle_text_message(event):
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # 🟢 กรณีที่ 1: ขอสรุปยอด (เวอร์ชันแยกตามบัญชี)
+        current_month_str = now.strftime("%m/%Y")
+        first_day_this_month = now.replace(day=1)
+        last_month_date = first_day_this_month - timedelta(days=1)
+        last_month_str = last_month_date.strftime("%m/%Y")
+
         if user_text == "สรุป":
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="📊 สรุปเดือนนี้", text="สรุปเดือนนี้")),
+                QuickReplyButton(action=MessageAction(label="📅 สรุปเดือนที่แล้ว", text="สรุปเดือนที่แล้ว")),
+                QuickReplyButton(action=MessageAction(label="📈 สรุปทั้งหมด", text="สรุปทั้งหมด"))
+            ])
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="ต้องการดูสรุปบัญชีของช่วงเวลาไหนครับ? 👇", quick_reply=quick_reply)
+            )
+            return
+
+        if user_text in ["สรุปเดือนนี้", "สรุปเดือนที่แล้ว", "สรุปทั้งหมด"]:
+            target_month = None
+            month_label = "ทั้งหมด"
+            
+            if user_text == "สรุปเดือนนี้":
+                target_month = current_month_str
+                month_label = f"เดือน {current_month_str}"
+            elif user_text == "สรุปเดือนที่แล้ว":
+                target_month = last_month_str
+                month_label = f"เดือน {last_month_str}"
+
             rows = worksheet.get_all_values()
-            total_income, total_expense = 0.0, 0.0
+            total_income, total_expense, total_monthly = 0.0, 0.0, 0.0
             income_accounts = {}
             expense_accounts = {}
+            monthly_accounts = {}
             
             for row in rows[1:]:
                 if len(row) >= 4:
+                    date_val = row[0]
+                    if target_month and not date_val.endswith(target_month):
+                        continue
+                        
                     try:
                         amt = float(str(row[3]).replace(',', ''))
                         record_type = row[2]
-                        # ดึงบัญชี (คอลัมน์ E / index 4)
                         account = row[4] if len(row) > 4 and row[4].strip() != "" else "ไม่ระบุบัญชี"
                         
                         if record_type == "รายรับ": 
@@ -65,27 +95,44 @@ def handle_text_message(event):
                         elif record_type == "รายจ่าย": 
                             total_expense += amt
                             expense_accounts[account] = expense_accounts.get(account, 0) + amt
+                        elif record_type == "รายจ่ายต้องชำระต่อเดือน":
+                            total_monthly += amt
+                            monthly_accounts[account] = monthly_accounts.get(account, 0) + amt
                     except ValueError:
                         pass
             
-            balance = total_income - total_expense
+            balance = total_income - total_expense - total_monthly
             
-            reply_msg = "📊 สรุปบัญชีของคุณ:\n\n"
+            # 🌟 คำนวณยอดคงเหลือแยกตามบัญชี
+            all_accounts = set(income_accounts.keys()) | set(expense_accounts.keys()) | set(monthly_accounts.keys())
+            balance_accounts = {}
+            for acc in all_accounts:
+                bal = income_accounts.get(acc, 0.0) - expense_accounts.get(acc, 0.0) - monthly_accounts.get(acc, 0.0)
+                balance_accounts[acc] = bal
+            
+            reply_msg = f"📊 สรุปบัญชี ({month_label}):\n\n"
             
             reply_msg += f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
             for acc, amt in income_accounts.items():
                 reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
-            reply_msg += f"\n🔴 รายจ่ายรวม: {total_expense:,.2f} บาท\n"
+            reply_msg += f"\n🔴 รายจ่ายทั่วไป: {total_expense:,.2f} บาท\n"
             for acc, amt in expense_accounts.items():
                 reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
-            reply_msg += f"\n💰 คงเหลือสุทธิ: {balance:,.2f} บาท"
+            reply_msg += f"\n🟡 บิลต้องชำระต่อเดือน: {total_monthly:,.2f} บาท\n"
+            for acc, amt in monthly_accounts.items():
+                reply_msg += f"   • {acc}: {amt:,.2f}\n"
+                
+            reply_msg += f"\n💰 คงเหลือแต่ละบัญชี:\n"
+            for acc, amt in balance_accounts.items():
+                reply_msg += f"   • {acc}: {amt:,.2f}\n"
+                
+            reply_msg += f"\n💵 ยอดคงเหลือรวมสุทธิ: {balance:,.2f} บาท"
             
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
             return
 
-        # 🔵 กรณีที่ 2: พิมพ์ตัวเลขเข้ามา (เริ่มต้นจดบัญชีเอง)
         is_number = False
         try:
             float(user_text.replace(',', ''))
@@ -99,15 +146,15 @@ def handle_text_message(event):
             
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="รายรับ", text="รายรับ")),
-                QuickReplyButton(action=MessageAction(label="รายจ่าย", text="รายจ่าย"))
+                QuickReplyButton(action=MessageAction(label="รายจ่ายทั่วไป", text="รายจ่าย")),
+                QuickReplyButton(action=MessageAction(label="บิลรายเดือน", text="รายจ่ายต้องชำระต่อเดือน"))
             ])
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=f"ยอดเงิน {user_text} บาท เป็นรายรับหรือรายจ่ายครับ? 👇", quick_reply=quick_reply)
+                TextSendMessage(text=f"ยอดเงิน {user_text} บาท เป็นประเภทไหนครับ? 👇", quick_reply=quick_reply)
             )
             return
 
-        # 🟡 กรณีที่ 3: จัดการปุ่มกด (เช็กสถานะจากแถวล่าสุด)
         rows = worksheet.get_all_values()
         last_row_index = len(rows)
         
@@ -122,7 +169,7 @@ def handle_text_message(event):
                     QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
                     QuickReplyButton(action=MessageAction(label="เงินสด", text="เงินสด"))
                 ])
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="เก็บเงิน/จ่ายเงิน ผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="ทำรายการผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
                 return
                 
             if len(last_row) > 4 and last_row[4] == "รอระบุบัญชี":
@@ -136,17 +183,30 @@ def handle_text_message(event):
                         QuickReplyButton(action=MessageAction(label="เงินเดือน", text="เงินเดือน")),
                         QuickReplyButton(action=MessageAction(label="อื่นๆ", text="อื่นๆ"))
                     ]
+                elif record_type == "รายจ่ายต้องชำระต่อเดือน":
+                    items = [
+                        QuickReplyButton(action=MessageAction(label="🧡 ShopeePay", text="ShopeePay")),
+                        QuickReplyButton(action=MessageAction(label="💸 SEasyCash", text="SEasyCash")),
+                        QuickReplyButton(action=MessageAction(label="💳 SPayExtra", text="SPayExtra")),
+                        QuickReplyButton(action=MessageAction(label="🌐 Internet", text="Internet")),
+                        QuickReplyButton(action=MessageAction(label="บิลอื่นๆ", text="บิลอื่นๆ"))
+                    ]
                 else:
                     items = [
                         QuickReplyButton(action=MessageAction(label="🍔 อาหาร", text="อาหาร")),
                         QuickReplyButton(action=MessageAction(label="🚗 เดินทาง", text="เดินทาง")),
-                        QuickReplyButton(action=MessageAction(label="ช้อปปิ้ง", text="ช้อปปิ้ง")),
-                        QuickReplyButton(action=MessageAction(label="บิลต่างๆ", text="บิลต่างๆ"))
+                        QuickReplyButton(action=MessageAction(label="🚆 BTS", text="BTS")),
+                        QuickReplyButton(action=MessageAction(label="🛍️ ช้อปปิ้ง", text="ช้อปปิ้ง")),
+                        QuickReplyButton(action=MessageAction(label="ทั่วไป", text="ทั่วไป"))
                     ]
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="หมวดหมู่คืออะไรครับ? 👇", quick_reply=QuickReply(items=items)))
                 return
                 
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
+                monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "บิลอื่นๆ"]
+                if user_text in monthly_bill_cats and last_row[2] == "รายจ่าย":
+                    worksheet.update_cell(last_row_index, 3, "รายจ่ายต้องชำระต่อเดือน")
+                    
                 worksheet.update_cell(last_row_index, 6, user_text)
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ บันทึกรายการลงตารางเรียบร้อยครับ!"))
                 return
