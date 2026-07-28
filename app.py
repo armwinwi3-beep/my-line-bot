@@ -44,43 +44,41 @@ def handle_text_message(event):
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # 🟢 กรณีที่ 1: ขอสรุปยอด (เวอร์ชันแยกหมวดหมู่)
+        # 🟢 กรณีที่ 1: ขอสรุปยอด (เวอร์ชันแยกตามบัญชี)
         if user_text == "สรุป":
             rows = worksheet.get_all_values()
             total_income, total_expense = 0.0, 0.0
-            income_cats = {}
-            expense_cats = {}
+            income_accounts = {}
+            expense_accounts = {}
             
             for row in rows[1:]:
-                # เช็กว่าแถวมีข้อมูลครบอย่างน้อยถึงยอดเงิน
                 if len(row) >= 4:
                     try:
                         amt = float(str(row[3]).replace(',', ''))
                         record_type = row[2]
-                        # ดึงหมวดหมู่ (คอลัมน์ F / index 5)
-                        category = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
+                        # ดึงบัญชี (คอลัมน์ E / index 4)
+                        account = row[4] if len(row) > 4 and row[4].strip() != "" else "ไม่ระบุบัญชี"
                         
                         if record_type == "รายรับ": 
                             total_income += amt
-                            income_cats[category] = income_cats.get(category, 0) + amt
+                            income_accounts[account] = income_accounts.get(account, 0) + amt
                         elif record_type == "รายจ่าย": 
                             total_expense += amt
-                            expense_cats[category] = expense_cats.get(category, 0) + amt
+                            expense_accounts[account] = expense_accounts.get(account, 0) + amt
                     except ValueError:
                         pass
             
             balance = total_income - total_expense
             
-            # จัดรูปแบบข้อความตอบกลับ
             reply_msg = "📊 สรุปบัญชีของคุณ:\n\n"
             
             reply_msg += f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
-            for cat, amt in income_cats.items():
-                reply_msg += f"   • {cat}: {amt:,.2f}\n"
+            for acc, amt in income_accounts.items():
+                reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
             reply_msg += f"\n🔴 รายจ่ายรวม: {total_expense:,.2f} บาท\n"
-            for cat, amt in expense_cats.items():
-                reply_msg += f"   • {cat}: {amt:,.2f}\n"
+            for acc, amt in expense_accounts.items():
+                reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
             reply_msg += f"\n💰 คงเหลือสุทธิ: {balance:,.2f} บาท"
             
