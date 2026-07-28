@@ -1,7 +1,7 @@
 import os
 import requests
 import gspread
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -18,6 +18,9 @@ handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
 
 # เชื่อมต่อกับ Google Sheets
 gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json')
+
+# 🕒 ตั้งค่าเวลาประเทศไทย (UTC+7)
+TH_TZ = timezone(timedelta(hours=7))
 
 @app.route("/webhook", methods=['POST'])
 def webhook():
@@ -37,11 +40,11 @@ def handle_text_message(event):
         sh = gc.open('MoneyBase')
         worksheet = sh.sheet1
         
-        now = datetime.now()
+        # 🕒 ดึงเวลาปัจจุบันของไทย
+        now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # 🟢 กรณีที่ 1: ขอสรุปยอด
         if user_text == "สรุป":
             rows = worksheet.get_all_values()
             total_income, total_expense = 0.0, 0.0
@@ -59,7 +62,6 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
             return
 
-        # 🔵 กรณีที่ 2: พิมพ์ตัวเลขเข้ามา (เริ่มต้นจดบัญชีเอง)
         is_number = False
         try:
             float(user_text.replace(',', ''))
@@ -69,10 +71,8 @@ def handle_text_message(event):
 
         if is_number:
             amount = user_text.replace(',', '')
-            # สร้างแถวใหม่และใส่สถานะ "รอระบุ..." ไว้
             worksheet.append_row([date_str, time_str, "รอระบุประเภท", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", "-", "-"])
             
-            # สร้างปุ่มให้กดเลือก
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="รายรับ", text="รายรับ")),
                 QuickReplyButton(action=MessageAction(label="รายจ่าย", text="รายจ่าย"))
@@ -83,14 +83,12 @@ def handle_text_message(event):
             )
             return
 
-        # 🟡 กรณีที่ 3: จัดการปุ่มกด (เช็กสถานะจากแถวล่าสุด)
         rows = worksheet.get_all_values()
         last_row_index = len(rows)
         
         if last_row_index > 1:
             last_row = rows[-1]
             
-            # ถ้ากำลังรอประเภท (รายรับ/รายจ่าย)
             if len(last_row) > 2 and last_row[2] == "รอระบุประเภท":
                 worksheet.update_cell(last_row_index, 3, user_text)
                 quick_reply = QuickReply(items=[
@@ -102,16 +100,16 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="เก็บเงิน/จ่ายเงิน ผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
                 return
                 
-            # ถ้ากำลังรอบัญชี
             if len(last_row) > 4 and last_row[4] == "รอระบุบัญชี":
                 worksheet.update_cell(last_row_index, 5, user_text)
                 record_type = last_row[2]
                 
-                # เปลี่ยนปุ่มหมวดหมู่ ตามประเภทรายรับ-รายจ่าย
+                # 🌟 เพิ่มปุ่ม "จากพ่อ" และ "จากแม่" ในหมวดรายรับ
                 if record_type == "รายรับ":
                     items = [
+                        QuickReplyButton(action=MessageAction(label="จากพ่อ", text="จากพ่อ")),
+                        QuickReplyButton(action=MessageAction(label="จากแม่", text="จากแม่")),
                         QuickReplyButton(action=MessageAction(label="เงินเดือน", text="เงินเดือน")),
-                        QuickReplyButton(action=MessageAction(label="ค้าขาย", text="ค้าขาย")),
                         QuickReplyButton(action=MessageAction(label="อื่นๆ", text="อื่นๆ"))
                     ]
                 else:
@@ -124,13 +122,11 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="หมวดหมู่คืออะไรครับ? 👇", quick_reply=QuickReply(items=items)))
                 return
                 
-            # ถ้ากำลังรอหมวดหมู่ (ขั้นสุดท้าย)
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
                 worksheet.update_cell(last_row_index, 6, user_text)
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ บันทึกรายการลงตารางเรียบร้อยครับ!"))
                 return
 
-        # ถ้าพิมพ์ข้อความอื่นๆ ที่บอทไม่เข้าใจ
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text="พิมพ์ 'ตัวเลขยอดเงิน' เพื่อเริ่มจดบัญชี\nหรือส่ง 'รูปสลิป' มาได้เลยครับ 💸")
@@ -165,16 +161,15 @@ def handle_image_message(event):
                 sender = data.get('sender', {}).get('displayName', '-')
                 receiver = data.get('receiver', {}).get('displayName', '-')
                 
-                now = datetime.now()
+                # 🕒 ดึงเวลาปัจจุบันของไทยสำหรับสลิปด้วย
+                now = datetime.now(TH_TZ)
                 date_str = now.strftime("%d/%m/%Y")
                 time_str = now.strftime("%H:%M:%S")
                 
                 sh = gc.open('MoneyBase')
                 worksheet = sh.sheet1
-                # สลิปถือเป็น "รายจ่าย" เสมอ
                 worksheet.append_row([date_str, time_str, "รายจ่าย", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", sender, receiver])
                 
-                # เด้งปุ่มถามบัญชีต่อเลย
                 quick_reply = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
                     QuickReplyButton(action=MessageAction(label="กรุงไทย", text="กรุงไทย")),
