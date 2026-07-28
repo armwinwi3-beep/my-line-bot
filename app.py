@@ -36,20 +36,37 @@ def handle_text_message(event):
         sh = gc.open('MoneyBase')
         worksheet = sh.sheet1
         
-        # ค้นหาว่าตารางมีข้อมูลทั้งหมดกี่แถว
-        rows = worksheet.get_all_values()
-        last_row_index = len(rows)
-        
-        # ถ้ามีข้อมูลมากกว่า 1 แถว (แปลว่ามีรายการสลิปอยู่)
-        if last_row_index > 1:
-            # นำข้อความที่พิมพ์ ไปใส่ในคอลัมน์ที่ 6 (คอลัมน์ F) ของแถวล่าสุด
-            worksheet.update_cell(last_row_index, 6, user_text)
-            reply_msg = f"📝 บันทึกหมวดหมู่ '{user_text}' ลงรายการล่าสุดเรียบร้อยครับ!"
-        else:
-            reply_msg = "ยังไม่มีรายการสลิป รบกวนส่งสลิปก่อนนะครับ"
+        # 🟢 กรณีที่ 1: ถ้าพิมพ์คำว่า "สรุป"
+        if user_text == "สรุป":
+            # ดึงข้อมูลทั้งหมดในคอลัมน์ C (ยอดเงิน) มา
+            amounts = worksheet.col_values(3)
             
+            total = 0.0
+            # ข้ามแถวแรกที่เป็นคำว่า "ยอดเงิน" แล้วเอาตัวเลขมาบวกกัน
+            for val in amounts[1:]:
+                try:
+                    # ลบลูกน้ำออก (ถ้ามี) แล้วแปลงค่าเป็นตัวเลข
+                    clean_val = str(val).replace(',', '')
+                    total += float(clean_val)
+                except ValueError:
+                    pass # ถ้าอ่านตัวเลขไม่ได้ให้ข้ามไป
+                    
+            # จัดรูปแบบตัวเลขให้มีลูกน้ำและทศนิยม 2 ตำแหน่ง
+            reply_msg = f"📊 สรุปยอดค่าใช้จ่าย:\nตอนนี้คุณโอนเงินไปแล้วทั้งหมด {total:,.2f} บาท ครับ!"
+            
+        # 🟡 กรณีที่ 2: ถ้าพิมพ์คำอื่นๆ (ให้ถือว่าเป็นหมวดหมู่)
+        else:
+            rows = worksheet.get_all_values()
+            last_row_index = len(rows)
+            
+            if last_row_index > 1:
+                worksheet.update_cell(last_row_index, 6, user_text)
+                reply_msg = f"📝 บันทึกหมวดหมู่ '{user_text}' ลงรายการล่าสุดเรียบร้อยครับ!"
+            else:
+                reply_msg = "ยังไม่มีรายการสลิป รบกวนส่งสลิปก่อนนะครับ"
+                
     except Exception as e:
-        reply_msg = f"❌ เกิดข้อผิดพลาดในการบันทึกหมวดหมู่: {str(e)}"
+        reply_msg = f"❌ เกิดข้อผิดพลาด: {str(e)}"
 
     line_bot_api.reply_message(
         event.reply_token,
