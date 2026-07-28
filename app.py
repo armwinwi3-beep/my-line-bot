@@ -23,16 +23,13 @@ gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json'
 TH_TZ = timezone(timedelta(hours=7))
 
 def get_current_worksheet():
-    """ฟังก์ชันช่วยดึง Worksheet ตามชื่อเดือนปัจจุบัน เช่น '07/26' หรือ '08/26'"""
     sh = gc.open('MoneyBase')
     now = datetime.now(TH_TZ)
-    sheet_name = now.strftime("%m/%y") # ได้รูปแบบ MM/YY เช่น 07/26
+    sheet_name = now.strftime("%m/%y")
     
     try:
-        # พยายามเปิดแท็บชื่อเดือนปัจจุบัน
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        # ถ้ายังไม่มีแท็บของเดือนนั้น ให้สร้างให้อัตโนมัติและใส่หัวตาราง
         worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
         headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
         worksheet.append_row(headers)
@@ -149,8 +146,6 @@ def handle_text_message(event):
 
         if user_text in ["สรุปเดือนนี้", "สรุปเดือนที่แล้ว", "สรุปทั้งหมด"]:
             sh = gc.open('MoneyBase')
-            
-            # กำหนดว่าจะดึงแท็บไหนมาสรุป
             target_sheets = []
             if user_text == "สรุปเดือนนี้":
                 target_sheets = [now.strftime("%m/%y")]
@@ -159,7 +154,6 @@ def handle_text_message(event):
                 target_sheets = [last_month_date.strftime("%m/%y")]
                 month_label = f"เดือน {last_month_str}"
             else:
-                # สรุปทั้งหมด เอาทุกแท็บมารวมกัน
                 target_sheets = [ws.title for ws in sh.worksheets()]
                 month_label = "ทั้งหมด"
 
@@ -201,7 +195,7 @@ def handle_text_message(event):
                             except ValueError:
                                 pass
                 except gspread.exceptions.WorksheetNotFound:
-                    pass # ถ้ายังไม่มีแท็บนั้น ข้ามไป
+                    pass
             
             balance = total_income - total_expense - total_monthly_paid
             
@@ -367,7 +361,7 @@ def handle_text_message(event):
 
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="พิมพ์ 'ตัวเลขยอดเงิน' เพื่อเริ่มจดบัญชี\nส่ง 'รูปสลิป'\nหรือพิมพ์ 'bill' เพื่อดูยอดค้างชำระครับ 💸")
+            TextSendMessage(text="จร้าจ๋าจ่ะ")
         )
                 
     except Exception as e:
