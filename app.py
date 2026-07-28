@@ -5,7 +5,10 @@ from datetime import datetime
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageMessage
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, ImageMessage,
+    QuickReply, QuickReplyButton, MessageAction
+)
 
 app = Flask(__name__)
 
@@ -41,74 +44,105 @@ def handle_text_message(event):
         # 🟢 กรณีที่ 1: ขอสรุปยอด
         if user_text == "สรุป":
             rows = worksheet.get_all_values()
-            total_income = 0.0
-            total_expense = 0.0
-            
-            for row in rows[1:]: # ข้ามบรรทัดหัวตาราง
+            total_income, total_expense = 0.0, 0.0
+            for row in rows[1:]:
                 if len(row) >= 4:
                     try:
                         amt = float(str(row[3]).replace(',', ''))
-                        if row[2] == "รายรับ":
-                            total_income += amt
-                        elif row[2] == "รายจ่าย":
-                            total_expense += amt
+                        if row[2] == "รายรับ": total_income += amt
+                        elif row[2] == "รายจ่าย": total_expense += amt
                     except ValueError:
                         pass
             
             balance = total_income - total_expense
-            reply_msg = (
-                f"📊 สรุปบัญชีของคุณ:\n"
-                f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
-                f"🔴 รายจ่ายรวม: {total_expense:,.2f} บาท\n"
-                f"💰 คงเหลือ: {balance:,.2f} บาท"
-            )
+            reply_msg = f"📊 สรุปบัญชี:\n🟢 รายรับ: {total_income:,.2f}\n🔴 รายจ่าย: {total_expense:,.2f}\n💰 คงเหลือ: {balance:,.2f} บาท"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
+            return
 
-        # 🔵 กรณีที่ 2: พิมพ์บันทึกเองแบบไม่มีสลิป (เงินสด, รายรับ)
-        elif user_text.startswith("รับ ") or user_text.startswith("จ่าย "):
-            parts = user_text.split()
-            if len(parts) >= 3:
-                action = "รายรับ" if parts[0] == "รับ" else "รายจ่าย"
-                amount = parts[1]
-                category = parts[2]
-                account = parts[3] if len(parts) > 3 else "ไม่ได้ระบุ"
-                
-                # โครงสร้างตาราง: [วันที่, เวลา, ประเภท, ยอดเงิน, บัญชี, หมวดหมู่, ผู้โอน, ผู้รับ]
-                worksheet.append_row([date_str, time_str, action, amount, account, category, "-", "-"])
-                reply_msg = f"✅ บันทึก{action} {amount} บาท (หมวด{category}) ลงบัญชี {account} สำเร็จ!"
-            else:
-                reply_msg = "⚠️ รูปแบบผิดครับ พิมพ์ตามนี้ได้เลย:\nรับ [ยอดเงิน] [หมวดหมู่] [บัญชี]\nจ่าย [ยอดเงิน] [หมวดหมู่] [บัญชี]"
-        
-        # 🟡 กรณีที่ 3: ระบุหมวดหมู่และบัญชีตามหลังสลิป
-        else:
-            rows = worksheet.get_all_values()
-            last_row_index = len(rows)
+        # 🔵 กรณีที่ 2: พิมพ์ตัวเลขเข้ามา (เริ่มต้นจดบัญชีเอง)
+        is_number = False
+        try:
+            float(user_text.replace(',', ''))
+            is_number = True
+        except ValueError:
+            pass
+
+        if is_number:
+            amount = user_text.replace(',', '')
+            # สร้างแถวใหม่และใส่สถานะ "รอระบุ..." ไว้
+            worksheet.append_row([date_str, time_str, "รอระบุประเภท", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", "-", "-"])
             
-            if last_row_index > 1:
-                parts = user_text.split()
-                category = parts[0]
-                account = parts[1] if len(parts) > 1 else "ไม่ได้ระบุ"
+            # สร้างปุ่มให้กดเลือก
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="รายรับ", text="รายรับ")),
+                QuickReplyButton(action=MessageAction(label="รายจ่าย", text="รายจ่าย"))
+            ])
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"ยอดเงิน {user_text} บาท เป็นรายรับหรือรายจ่ายครับ? 👇", quick_reply=quick_reply)
+            )
+            return
+
+        # 🟡 กรณีที่ 3: จัดการปุ่มกด (เช็กสถานะจากแถวล่าสุด)
+        rows = worksheet.get_all_values()
+        last_row_index = len(rows)
+        
+        if last_row_index > 1:
+            last_row = rows[-1]
+            
+            # ถ้ากำลังรอประเภท (รายรับ/รายจ่าย)
+            if len(last_row) > 2 and last_row[2] == "รอระบุประเภท":
+                worksheet.update_cell(last_row_index, 3, user_text)
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
+                    QuickReplyButton(action=MessageAction(label="กรุงไทย", text="กรุงไทย")),
+                    QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
+                    QuickReplyButton(action=MessageAction(label="เงินสด", text="เงินสด"))
+                ])
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="เก็บเงิน/จ่ายเงิน ผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
+                return
                 
-                # อัปเดตคอลัมน์ E (บัญชี) และ F (หมวดหมู่)
-                worksheet.update_cell(last_row_index, 5, account)
-                worksheet.update_cell(last_row_index, 6, category)
+            # ถ้ากำลังรอบัญชี
+            if len(last_row) > 4 and last_row[4] == "รอระบุบัญชี":
+                worksheet.update_cell(last_row_index, 5, user_text)
+                record_type = last_row[2]
                 
-                reply_msg = f"📝 จัดกลุ่มสลิปนี้เป็น: ค่า'{category}' โดยใช้บัญชี '{account}' เรียบร้อยครับ!"
-            else:
-                reply_msg = "ยังไม่มีรายการสลิป รบกวนส่งสลิปก่อนนะครับ"
+                # เปลี่ยนปุ่มหมวดหมู่ ตามประเภทรายรับ-รายจ่าย
+                if record_type == "รายรับ":
+                    items = [
+                        QuickReplyButton(action=MessageAction(label="เงินเดือน", text="เงินเดือน")),
+                        QuickReplyButton(action=MessageAction(label="ค้าขาย", text="ค้าขาย")),
+                        QuickReplyButton(action=MessageAction(label="อื่นๆ", text="อื่นๆ"))
+                    ]
+                else:
+                    items = [
+                        QuickReplyButton(action=MessageAction(label="🍔 อาหาร", text="อาหาร")),
+                        QuickReplyButton(action=MessageAction(label="🚗 เดินทาง", text="เดินทาง")),
+                        QuickReplyButton(action=MessageAction(label="ช้อปปิ้ง", text="ช้อปปิ้ง")),
+                        QuickReplyButton(action=MessageAction(label="บิลต่างๆ", text="บิลต่างๆ"))
+                    ]
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="หมวดหมู่คืออะไรครับ? 👇", quick_reply=QuickReply(items=items)))
+                return
+                
+            # ถ้ากำลังรอหมวดหมู่ (ขั้นสุดท้าย)
+            if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
+                worksheet.update_cell(last_row_index, 6, user_text)
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ บันทึกรายการลงตารางเรียบร้อยครับ!"))
+                return
+
+        # ถ้าพิมพ์ข้อความอื่นๆ ที่บอทไม่เข้าใจ
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="พิมพ์ 'ตัวเลขยอดเงิน' เพื่อเริ่มจดบัญชี\nหรือส่ง 'รูปสลิป' มาได้เลยครับ 💸")
+        )
                 
     except Exception as e:
-        reply_msg = f"❌ เกิดข้อผิดพลาด: {str(e)}"
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_msg)
-    )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}"))
 
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image_message(event):
     message_content = line_bot_api.get_message_content(event.message.id)
     file_path = "temp_slip.jpg"
-    
     with open(file_path, 'wb') as fd:
         for chunk in message_content.iter_content():
             fd.write(chunk)
@@ -128,38 +162,32 @@ def handle_image_message(event):
             if result.get('success'):
                 data = result['data']
                 amount = data.get('amount')
-                sender_name = data.get('sender', {}).get('displayName', 'ไม่ทราบชื่อ')
-                receiver_name = data.get('receiver', {}).get('displayName', 'ไม่ทราบชื่อ')
+                sender = data.get('sender', {}).get('displayName', '-')
+                receiver = data.get('receiver', {}).get('displayName', '-')
                 
                 now = datetime.now()
                 date_str = now.strftime("%d/%m/%Y")
                 time_str = now.strftime("%H:%M:%S")
                 
-                try:
-                    sh = gc.open('MoneyBase')
-                    worksheet = sh.sheet1
-                    # สลิปถือเป็น "รายจ่าย" เสมอ โดยเว้นว่าง บัญชีและหมวดหมู่ไว้ให้ผู้ใช้พิมพ์ต่อ
-                    worksheet.append_row([date_str, time_str, "รายจ่าย", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", sender_name, receiver_name])
-                    
-                    reply_msg = (
-                        f"✅ บันทึกสลิปลงชีตสำเร็จ!\n"
-                        f"💸 ยอดโอนออก: {amount} บาท\n"
-                        f"💡 พิมพ์บอกผมต่อได้เลยครับว่า (หมวดหมู่ บัญชี)\n"
-                        f"เช่น: ค่าอาหาร กสิกร"
-                    )
-                except Exception as sheet_error:
-                    reply_msg = f"❌ อ่านสลิปได้ แต่บันทึกลงชีตไม่สำเร็จ: {str(sheet_error)}"
+                sh = gc.open('MoneyBase')
+                worksheet = sh.sheet1
+                # สลิปถือเป็น "รายจ่าย" เสมอ
+                worksheet.append_row([date_str, time_str, "รายจ่าย", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", sender, receiver])
+                
+                # เด้งปุ่มถามบัญชีต่อเลย
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
+                    QuickReplyButton(action=MessageAction(label="กรุงไทย", text="กรุงไทย")),
+                    QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney"))
+                ])
+                reply_msg = f"✅ อ่านสลิปสำเร็จ! (โอนออก: {amount} บาท)\n👇 เลือกบัญชีที่โอนด้านล่างนี้ได้เลยครับ"
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg, quick_reply=quick_reply))
             else:
-                reply_msg = "❌ อ่านไม่สำเร็จครับ (รูปอาจจะไม่ใช่สลิปโอนเงินที่รองรับ)"
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ อ่านไม่สำเร็จครับ (รูปอาจจะไม่ใช่สลิป)"))
         else:
-            reply_msg = f"❌ เกิดข้อผิดพลาดในการเชื่อมต่อ SlipOK (Status: {response.status_code})"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ เชื่อมต่อ SlipOK ไม่ได้"))
     except Exception as e:
-        reply_msg = f"❌ เกิดข้อผิดพลาด: {str(e)}"
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_msg)
-    )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ ผิดพลาด: {str(e)}"))
 
 if __name__ == "__main__":
     app.run(port=8080)
