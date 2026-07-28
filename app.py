@@ -40,28 +40,54 @@ def handle_text_message(event):
         sh = gc.open('MoneyBase')
         worksheet = sh.sheet1
         
-        # 🕒 ดึงเวลาปัจจุบันของไทย
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
+        # 🟢 กรณีที่ 1: ขอสรุปยอด (เวอร์ชันแยกหมวดหมู่)
         if user_text == "สรุป":
             rows = worksheet.get_all_values()
             total_income, total_expense = 0.0, 0.0
+            income_cats = {}
+            expense_cats = {}
+            
             for row in rows[1:]:
+                # เช็กว่าแถวมีข้อมูลครบอย่างน้อยถึงยอดเงิน
                 if len(row) >= 4:
                     try:
                         amt = float(str(row[3]).replace(',', ''))
-                        if row[2] == "รายรับ": total_income += amt
-                        elif row[2] == "รายจ่าย": total_expense += amt
+                        record_type = row[2]
+                        # ดึงหมวดหมู่ (คอลัมน์ F / index 5)
+                        category = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
+                        
+                        if record_type == "รายรับ": 
+                            total_income += amt
+                            income_cats[category] = income_cats.get(category, 0) + amt
+                        elif record_type == "รายจ่าย": 
+                            total_expense += amt
+                            expense_cats[category] = expense_cats.get(category, 0) + amt
                     except ValueError:
                         pass
             
             balance = total_income - total_expense
-            reply_msg = f"📊 สรุปบัญชี:\n🟢 รายรับ: {total_income:,.2f}\n🔴 รายจ่าย: {total_expense:,.2f}\n💰 คงเหลือ: {balance:,.2f} บาท"
+            
+            # จัดรูปแบบข้อความตอบกลับ
+            reply_msg = "📊 สรุปบัญชีของคุณ:\n\n"
+            
+            reply_msg += f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
+            for cat, amt in income_cats.items():
+                reply_msg += f"   • {cat}: {amt:,.2f}\n"
+                
+            reply_msg += f"\n🔴 รายจ่ายรวม: {total_expense:,.2f} บาท\n"
+            for cat, amt in expense_cats.items():
+                reply_msg += f"   • {cat}: {amt:,.2f}\n"
+                
+            reply_msg += f"\n💰 คงเหลือสุทธิ: {balance:,.2f} บาท"
+            
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
             return
 
+        # 🔵 กรณีที่ 2: พิมพ์ตัวเลขเข้ามา (เริ่มต้นจดบัญชีเอง)
         is_number = False
         try:
             float(user_text.replace(',', ''))
@@ -83,6 +109,7 @@ def handle_text_message(event):
             )
             return
 
+        # 🟡 กรณีที่ 3: จัดการปุ่มกด (เช็กสถานะจากแถวล่าสุด)
         rows = worksheet.get_all_values()
         last_row_index = len(rows)
         
@@ -104,7 +131,6 @@ def handle_text_message(event):
                 worksheet.update_cell(last_row_index, 5, user_text)
                 record_type = last_row[2]
                 
-                # 🌟 เพิ่มปุ่ม "จากพ่อ" และ "จากแม่" ในหมวดรายรับ
                 if record_type == "รายรับ":
                     items = [
                         QuickReplyButton(action=MessageAction(label="จากพ่อ", text="จากพ่อ")),
@@ -161,7 +187,6 @@ def handle_image_message(event):
                 sender = data.get('sender', {}).get('displayName', '-')
                 receiver = data.get('receiver', {}).get('displayName', '-')
                 
-                # 🕒 ดึงเวลาปัจจุบันของไทยสำหรับสลิปด้วย
                 now = datetime.now(TH_TZ)
                 date_str = now.strftime("%d/%m/%Y")
                 time_str = now.strftime("%H:%M:%S")
