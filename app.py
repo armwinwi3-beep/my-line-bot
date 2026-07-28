@@ -29,9 +29,31 @@ def webhook():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
+    user_text = event.message.text.strip()
+    
+    try:
+        # เชื่อมต่อกับ Google Sheets
+        sh = gc.open('MoneyBase')
+        worksheet = sh.sheet1
+        
+        # ค้นหาว่าตารางมีข้อมูลทั้งหมดกี่แถว
+        rows = worksheet.get_all_values()
+        last_row_index = len(rows)
+        
+        # ถ้ามีข้อมูลมากกว่า 1 แถว (แปลว่ามีรายการสลิปอยู่)
+        if last_row_index > 1:
+            # นำข้อความที่พิมพ์ ไปใส่ในคอลัมน์ที่ 6 (คอลัมน์ F) ของแถวล่าสุด
+            worksheet.update_cell(last_row_index, 6, user_text)
+            reply_msg = f"📝 บันทึกหมวดหมู่ '{user_text}' ลงรายการล่าสุดเรียบร้อยครับ!"
+        else:
+            reply_msg = "ยังไม่มีรายการสลิป รบกวนส่งสลิปก่อนนะครับ"
+            
+    except Exception as e:
+        reply_msg = f"❌ เกิดข้อผิดพลาดในการบันทึกหมวดหมู่: {str(e)}"
+
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text="ส่งรูปสลิปโอนเงินมาให้ผมบันทึกบัญชีได้เลยครับ!")
+        TextSendMessage(text=reply_msg)
     )
 
 @handler.add(MessageEvent, message=ImageMessage)
