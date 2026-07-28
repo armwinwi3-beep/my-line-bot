@@ -22,6 +22,23 @@ gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json'
 # 🕒 ตั้งค่าเวลาประเทศไทย (UTC+7)
 TH_TZ = timezone(timedelta(hours=7))
 
+def get_current_worksheet():
+    """ฟังก์ชันช่วยดึง Worksheet ตามชื่อเดือนปัจจุบัน เช่น '07/26' หรือ '08/26'"""
+    sh = gc.open('MoneyBase')
+    now = datetime.now(TH_TZ)
+    sheet_name = now.strftime("%m/%y") # ได้รูปแบบ MM/YY เช่น 07/26
+    
+    try:
+        # พยายามเปิดแท็บชื่อเดือนปัจจุบัน
+        worksheet = sh.worksheet(sheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        # ถ้ายังไม่มีแท็บของเดือนนั้น ให้สร้างให้อัตโนมัติและใส่หัวตาราง
+        worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
+        headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
+        worksheet.append_row(headers)
+        
+    return worksheet
+
 @app.route("/webhook", methods=['POST'])
 def webhook():
     signature = request.headers['X-Line-Signature']
@@ -37,8 +54,7 @@ def handle_text_message(event):
     user_text = event.message.text.strip()
     
     try:
-        sh = gc.open('MoneyBase')
-        worksheet = sh.sheet1
+        worksheet = get_current_worksheet()
         
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
@@ -55,7 +71,7 @@ def handle_text_message(event):
             unpaid_bills = []
             for i, row in enumerate(rows):
                 if len(row) >= 9:
-                    if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[8] == "ยังไม่จ่าย" and row[0].endswith(current_month_str):
+                    if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[8] == "ยังไม่จ่าย":
                         cat = row[5] if len(row) > 5 else "ไม่ระบุ"
                         unpaid_bills.append((cat, row[3]))
             
@@ -77,7 +93,6 @@ def handle_text_message(event):
         # 🟢 2. ขั้นตอนเลือกบิลเพื่อไปเลือกบัญชีต่อ
         if user_text.startswith("อัปเดตบิล "):
             target_cat = user_text.replace("อัปเดตบิล ", "").strip()
-            # ส่งปุ่มเลือกบัญชีให้ผู้ใช้กด
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="กสิกร", text=f"จ่ายผ่าน|{target_cat}|กสิกร")),
                 QuickReplyButton(action=MessageAction(label="กรุงไทย", text=f"จ่ายผ่าน|{target_cat}|กรุงไทย")),
@@ -102,9 +117,7 @@ def handle_text_message(event):
                 row = rows[i]
                 if len(row) >= 9:
                     if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
-                        # อัปเดตสถานะเป็น จ่ายแล้ว (คอลัมน์ I / index 9)
                         worksheet.update_cell(i+1, 9, "จ่ายแล้ว")
-                        # บันทึกบัญชีที่ใช้จ่ายลงคอลัมน์ J (index 10) ถ้ารองรับ หรืออัปเดตช่อง E
                         while len(rows[i]) < 10:
                             worksheet.update_cell(i+1, 10, "-")
                             rows = worksheet.get_all_values()
@@ -135,48 +148,60 @@ def handle_text_message(event):
             return
 
         if user_text in ["สรุปเดือนนี้", "สรุปเดือนที่แล้ว", "สรุปทั้งหมด"]:
-            target_month = current_month_str if user_text == "สรุปเดือนนี้" else last_month_str if user_text == "สรุปเดือนที่แล้ว" else None
-            month_label = f"เดือน {target_month}" if target_month else "ทั้งหมด"
+            sh = gc.open('MoneyBase')
+            
+            # กำหนดว่าจะดึงแท็บไหนมาสรุป
+            target_sheets = []
+            if user_text == "สรุปเดือนนี้":
+                target_sheets = [now.strftime("%m/%y")]
+                month_label = f"เดือน {current_month_str}"
+            elif user_text == "สรุปเดือนที่แล้ว":
+                target_sheets = [last_month_date.strftime("%m/%y")]
+                month_label = f"เดือน {last_month_str}"
+            else:
+                # สรุปทั้งหมด เอาทุกแท็บมารวมกัน
+                target_sheets = [ws.title for ws in sh.worksheets()]
+                month_label = "ทั้งหมด"
 
-            rows = worksheet.get_all_values()
             total_income, total_expense = 0.0, 0.0
             total_monthly_paid, total_monthly_unpaid = 0.0, 0.0
             
             income_accounts, expense_accounts, monthly_accounts = {}, {}, {}
             monthly_paid_cats, monthly_unpaid_cats = {}, {}
             
-            for row in rows[1:]:
-                if len(row) >= 4:
-                    date_val = row[0]
-                    if target_month and not date_val.endswith(target_month):
-                        continue
-                        
-                    try:
-                        amt = float(str(row[3]).replace(',', ''))
-                        record_type = row[2]
-                        account = row[4] if len(row) > 4 and row[4].strip() != "" else "-"
-                        cat = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
-                        
-                        if record_type == "รายรับ": 
-                            total_income += amt
-                            income_accounts[account] = income_accounts.get(account, 0) + amt
-                        elif record_type == "รายจ่าย": 
-                            total_expense += amt
-                            expense_accounts[account] = expense_accounts.get(account, 0) + amt
-                        elif record_type == "รายจ่ายต้องชำระต่อเดือน":
-                            status = row[8] if len(row) > 8 and row[8].strip() != "" else "จ่ายแล้ว"
-                            if status == "ยังไม่จ่าย":
-                                total_monthly_unpaid += amt
-                                monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
-                            else:
-                                total_monthly_paid += amt
-                                monthly_paid_cats[cat] = monthly_paid_cats.get(cat, 0) + amt
-                                # 🌟 ดึงบัญชีที่ใช้จ่ายจริงจากคอลัมน์ J (ถ้ามี) ถ้าไม่มีให้ใช้บัญชีเดิม
-                                paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
-                                if paid_account != "-":
-                                    monthly_accounts[paid_account] = monthly_accounts.get(paid_account, 0) + amt
-                    except ValueError:
-                        pass
+            for s_name in target_sheets:
+                try:
+                    ws = sh.worksheet(s_name)
+                    rows = ws.get_all_values()
+                    for row in rows[1:]:
+                        if len(row) >= 4:
+                            try:
+                                amt = float(str(row[3]).replace(',', ''))
+                                record_type = row[2]
+                                account = row[4] if len(row) > 4 and row[4].strip() != "" else "-"
+                                cat = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
+                                
+                                if record_type == "รายรับ": 
+                                    total_income += amt
+                                    income_accounts[account] = income_accounts.get(account, 0) + amt
+                                elif record_type == "รายจ่าย": 
+                                    total_expense += amt
+                                    expense_accounts[account] = expense_accounts.get(account, 0) + amt
+                                elif record_type == "รายจ่ายต้องชำระต่อเดือน":
+                                    status = row[8] if len(row) > 8 and row[8].strip() != "" else "จ่ายแล้ว"
+                                    if status == "ยังไม่จ่าย":
+                                        total_monthly_unpaid += amt
+                                        monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
+                                    else:
+                                        total_monthly_paid += amt
+                                        monthly_paid_cats[cat] = monthly_paid_cats.get(cat, 0) + amt
+                                        paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
+                                        if paid_account != "-":
+                                            monthly_accounts[paid_account] = monthly_accounts.get(paid_account, 0) + amt
+                            except ValueError:
+                                pass
+                except gspread.exceptions.WorksheetNotFound:
+                    pass # ถ้ายังไม่มีแท็บนั้น ข้ามไป
             
             balance = total_income - total_expense - total_monthly_paid
             
@@ -378,8 +403,7 @@ def handle_image_message(event):
                 date_str = now.strftime("%d/%m/%Y")
                 time_str = now.strftime("%H:%M:%S")
                 
-                sh = gc.open('MoneyBase')
-                worksheet = sh.sheet1
+                worksheet = get_current_worksheet()
                 worksheet.append_row([date_str, time_str, "รายจ่าย", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", sender, receiver, "-", "-"])
                 
                 quick_reply = QuickReply(items=[
