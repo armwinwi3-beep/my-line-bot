@@ -11,7 +11,9 @@ from linebot.models import (
 )
 
 app = Flask(__name__)
-
+@app.route("/")
+def home():
+    return "Bot is awake and running!", 200
 # เชื่อมต่อกับ LINE บอท
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
