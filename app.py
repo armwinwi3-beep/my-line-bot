@@ -1,6 +1,7 @@
 import os
 import requests
 import gspread
+import random
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
@@ -11,9 +12,11 @@ from linebot.models import (
 )
 
 app = Flask(__name__)
+
 @app.route("/")
 def home():
     return "Bot is awake and running!", 200
+
 # เชื่อมต่อกับ LINE บอท
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
@@ -273,6 +276,7 @@ def handle_text_message(event):
                         QuickReplyButton(action=MessageAction(label="💳 SPayExtra", text="SPayExtra")),
                         QuickReplyButton(action=MessageAction(label="🌐 Internet", text="Internet")),
                         QuickReplyButton(action=MessageAction(label="🦷 ค่าทำฟัน", text="ค่าทำฟัน")),
+                        QuickReplyButton(action=MessageAction(label="🏥 ประกันสังคม", text="ประกันสังคม")),
                         QuickReplyButton(action=MessageAction(label="บิลอื่นๆ", text="บิลอื่นๆ"))
                     ]
                     line_bot_api.reply_message(event.reply_token, TextSendMessage(text="เลือกหมวดหมู่บิลรายเดือนครับ? 👇", quick_reply=QuickReply(items=items)))
@@ -312,7 +316,7 @@ def handle_text_message(event):
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
                 worksheet.update_cell(last_row_index, 6, user_text)
                 
-                monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "บิลอื่นๆ"]
+                monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"]
                 is_monthly = False
                 if user_text in monthly_bill_cats and last_row[2] == "รายจ่าย":
                     worksheet.update_cell(last_row_index, 3, "รายจ่ายต้องชำระต่อเดือน")
@@ -361,9 +365,19 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกบิลเรียบร้อย! (หักเงินจากบัญชี {account_name} แล้ว)"))
                 return
 
+        # 🔵 ข้อความตอบกลับเมื่อพิมพ์ข้อความอื่นๆ ที่ไม่ได้ตั้งค่าไว้ (สุ่มตอบกวนๆ)
+        cheeky_replies = [
+            "แหมมม ทักมาซะตกใจ นึกว่าจะโอนเงินให้! 💸 ถ้าจะจดบัญชี พิมพ์ตัวเลขมาได้เลยจ้า",
+            "จ้าาา รับทราบจ้า! แต่ถ้าจะให้จดบัญชี รบกวนพิมพ์เป็นตัวเลขนะจ๊ะตัวเอง 😆",
+            "ทักมาทำไม เหงาอ่อ? 😝 บอทคุยไม่เก่งนะ บอทเก่งแต่เรื่องทวงบิล! (พิมพ์ bill เพื่อดูบิลค้างได้นะ)",
+            "จร้าจ่าจ้ะ! 🤣 ถ้าไม่ได้มาจดบัญชี บอทขออนุญาตไปนอนพักสายตาก่อนนะ...",
+            "พิมพ์มาแบบนี้ บอทงงเด้อ! 🤪 ถ้าจะจดรายจ่าย พิมพ์ตัวเลขมาโลดดด",
+            "ฮั่นแน่! แอบอู้ไม่ยอมทำงานมาแชทเล่นกับบอทใช่มั้ย! 🤨 รีบไปหาเงินมาให้บอทจดเดี๋ยวนี้!"
+        ]
+        
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="จร้าจ๋าจ่ะ")
+            TextSendMessage(text=random.choice(cheeky_replies))
         )
                 
     except Exception as e:
