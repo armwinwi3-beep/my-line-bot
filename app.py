@@ -167,6 +167,7 @@ def handle_text_message(event):
             
             income_accounts, expense_accounts, monthly_accounts = {}, {}, {}
             monthly_paid_cats, monthly_unpaid_cats = {}, {}
+            transfer_in_accounts, transfer_out_accounts = {}, {}
             
             for s_name in target_sheets:
                 try:
@@ -197,6 +198,11 @@ def handle_text_message(event):
                                         paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
                                         if paid_account != "-":
                                             monthly_accounts[paid_account] = monthly_accounts.get(paid_account, 0) + amt
+                                elif record_type == "ย้ายเงิน":
+                                    src_acc = account
+                                    dst_acc = cat
+                                    if src_acc != "-": transfer_out_accounts[src_acc] = transfer_out_accounts.get(src_acc, 0) + amt
+                                    if dst_acc != "-": transfer_in_accounts[dst_acc] = transfer_in_accounts.get(dst_acc, 0) + amt
                             except ValueError:
                                 pass
                 except gspread.exceptions.WorksheetNotFound:
@@ -204,11 +210,15 @@ def handle_text_message(event):
             
             balance = total_income - total_expense - total_monthly_paid
             
-            all_accounts = set(income_accounts.keys()) | set(expense_accounts.keys()) | set(monthly_accounts.keys())
+            all_accounts = set(income_accounts.keys()) | set(expense_accounts.keys()) | set(monthly_accounts.keys()) | set(transfer_in_accounts.keys()) | set(transfer_out_accounts.keys())
             balance_accounts = {}
             for acc in all_accounts:
                 if acc == "-": continue
-                bal = income_accounts.get(acc, 0.0) - expense_accounts.get(acc, 0.0) - monthly_accounts.get(acc, 0.0)
+                bal = (income_accounts.get(acc, 0.0) 
+                       - expense_accounts.get(acc, 0.0) 
+                       - monthly_accounts.get(acc, 0.0) 
+                       + transfer_in_accounts.get(acc, 0.0) 
+                       - transfer_out_accounts.get(acc, 0.0))
                 balance_accounts[acc] = bal
             
             reply_msg = f"📊 สรุปบัญชี ({month_label}):\n\n"
@@ -250,7 +260,8 @@ def handle_text_message(event):
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="รายรับ", text="รายรับ")),
                 QuickReplyButton(action=MessageAction(label="รายจ่ายทั่วไป", text="รายจ่าย")),
-                QuickReplyButton(action=MessageAction(label="บิลรายเดือน", text="รายจ่ายต้องชำระต่อเดือน"))
+                QuickReplyButton(action=MessageAction(label="บิลรายเดือน", text="รายจ่ายต้องชำระต่อเดือน")),
+                QuickReplyButton(action=MessageAction(label="🔄 ย้ายเงิน", text="ย้ายเงิน"))
             ])
             line_bot_api.reply_message(
                 event.reply_token,
@@ -281,6 +292,15 @@ def handle_text_message(event):
                     ]
                     line_bot_api.reply_message(event.reply_token, TextSendMessage(text="เลือกหมวดหมู่บิลรายเดือนครับ? 👇", quick_reply=QuickReply(items=items)))
                     return
+                elif user_text == "ย้ายเงิน":
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
+                        QuickReplyButton(action=MessageAction(label="กรุงไทย", text="กรุงไทย")),
+                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
+                        QuickReplyButton(action=MessageAction(label="เงินสด", text="เงินสด"))
+                    ])
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="โอนออกจากบัญชีไหนครับ (ต้นทาง)? 👇", quick_reply=quick_reply))
+                    return
                 else:
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
@@ -295,7 +315,17 @@ def handle_text_message(event):
                 worksheet.update_cell(last_row_index, 5, user_text)
                 record_type = last_row[2]
                 
-                if record_type == "รายรับ":
+                if record_type == "ย้ายเงิน":
+                    worksheet.update_cell(last_row_index, 6, "รอระบุบัญชีปลายทาง")
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="กสิกร", text="กสิกร")),
+                        QuickReplyButton(action=MessageAction(label="กรุงไทย", text="กรุงไทย")),
+                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
+                        QuickReplyButton(action=MessageAction(label="เงินสด", text="เงินสด"))
+                    ])
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="ย้ายเข้าบัญชีไหนครับ (ปลายทาง)? 👇", quick_reply=quick_reply))
+                    return
+                elif record_type == "รายรับ":
                     items = [
                         QuickReplyButton(action=MessageAction(label="จากพ่อ", text="จากพ่อ")),
                         QuickReplyButton(action=MessageAction(label="จากแม่", text="จากแม่")),
@@ -313,6 +343,14 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="หมวดหมู่คืออะไรครับ? 👇", quick_reply=QuickReply(items=items)))
                 return
                 
+            # 🔵 สำหรับจังหวะเลือกบัญชีปลายทางของการ "ย้ายเงิน"
+            if len(last_row) > 5 and last_row[5] == "รอระบุบัญชีปลายทาง":
+                worksheet.update_cell(last_row_index, 6, user_text)
+                worksheet.update_cell(last_row_index, 9, "-")
+                worksheet.update_cell(last_row_index, 10, "-")
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกย้ายเงินจาก {last_row[4]} ➡️ {user_text} จำนวน {last_row[3]:,.2f} บาท เรียบร้อย!"))
+                return
+
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
                 worksheet.update_cell(last_row_index, 6, user_text)
                 
