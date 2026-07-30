@@ -348,7 +348,14 @@ def handle_text_message(event):
                 worksheet.update_cell(last_row_index, 6, user_text)
                 worksheet.update_cell(last_row_index, 9, "-")
                 worksheet.update_cell(last_row_index, 10, "-")
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกย้ายเงินจาก {last_row[4]} ➡️ {user_text} จำนวน {last_row[3]:,.2f} บาท เรียบร้อย!"))
+                
+                # แปลงยอดเงินเป็นตัวเลขก่อนทำการจัดรูปแบบป้องกัน Error
+                try:
+                    transfer_amount = float(str(last_row[3]).replace(',', ''))
+                except ValueError:
+                    transfer_amount = 0.0
+                    
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกย้ายเงินจาก {last_row[4]} ➡️ {user_text} จำนวน {transfer_amount:,.2f} บาท เรียบร้อย!"))
                 return
 
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
