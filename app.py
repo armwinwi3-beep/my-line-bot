@@ -56,6 +56,7 @@ def handle_text_message(event):
     user_text = event.message.text.strip()
     
     try:
+        sh = gc.open('MoneyBase')
         worksheet = get_current_worksheet()
         
         now = datetime.now(TH_TZ)
@@ -67,21 +68,22 @@ def handle_text_message(event):
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%Y")
 
-        # 🟢 1. เช็คบิลที่ยังไม่จ่าย (คำสั่ง bill)
+        # 🟢 1. เช็คบิลที่ยังไม่จ่าย (สแกนหาบิลค้างชำระจาก "ทุกแท็บ")
         if user_text.lower() == "bill":
-            rows = worksheet.get_all_values()
             unpaid_bills = []
-            for i, row in enumerate(rows):
-                if len(row) >= 9:
-                    if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[8] == "ยังไม่จ่าย":
-                        cat = row[5] if len(row) > 5 else "ไม่ระบุ"
-                        unpaid_bills.append((cat, row[3]))
+            for ws in sh.worksheets():
+                rows = ws.get_all_values()
+                for i, row in enumerate(rows):
+                    if len(row) >= 9:
+                        if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[8] == "ยังไม่จ่าย":
+                            cat = row[5] if len(row) > 5 else "ไม่ระบุ"
+                            unpaid_bills.append((cat, row[3]))
             
             if not unpaid_bills:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🎉 เดือนนี้ไม่มีบิลค้างชำระครับ!"))
                 return
                 
-            reply_msg = "🧾 บิลที่ยังไม่จ่ายเดือนนี้:\n"
+            reply_msg = "🧾 บิลที่ยังไม่จ่าย:\n"
             items = []
             for cat, amt in unpaid_bills:
                 reply_msg += f"• {cat} : {amt} บาท\n"
@@ -107,25 +109,27 @@ def handle_text_message(event):
             )
             return
 
-        # 🟢 3. บันทึกสถานะ "จ่ายแล้ว" พร้อมบัญชีที่จ่ายจริง
+        # 🟢 3. บันทึกสถานะ "จ่ายแล้ว" พร้อมบัญชีที่จ่ายจริง (ค้นหาและอัปเดตจากทุกแท็บ)
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
             chosen_account = parts[2]
             
-            rows = worksheet.get_all_values()
             found = False
-            for i in range(len(rows)-1, 0, -1):
-                row = rows[i]
-                if len(row) >= 9:
-                    if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
-                        worksheet.update_cell(i+1, 9, "จ่ายแล้ว")
-                        while len(rows[i]) < 10:
-                            worksheet.update_cell(i+1, 10, "-")
-                            rows = worksheet.get_all_values()
-                        worksheet.update_cell(i+1, 10, chosen_account)
-                        found = True
-                        break
+            for ws in reversed(sh.worksheets()):  # ค้นหาจากแท็บเดือนล่าสุดย้อนกลับไป
+                rows = ws.get_all_values()
+                for i in range(len(rows)-1, 0, -1):
+                    row = rows[i]
+                    if len(row) >= 9:
+                        if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
+                            ws.update_cell(i+1, 9, "จ่ายแล้ว")
+                            while len(ws.row_values(i+1)) < 10:
+                                ws.update_cell(i+1, 10, "-")
+                            ws.update_cell(i+1, 10, chosen_account)
+                            found = True
+                            break
+                if found:
+                    break
                         
             if found:
                 line_bot_api.reply_message(
@@ -150,43 +154,64 @@ def handle_text_message(event):
             return
 
         if user_text in ["สรุปเดือนนี้", "สรุปเดือนที่แล้ว", "สรุปทั้งหมด"]:
-            sh = gc.open('MoneyBase')
-            target_sheets = []
+            target_sheets_names = []
             if user_text == "สรุปเดือนนี้":
-                target_sheets = [now.strftime("%m/%y")]
+                target_sheets_names = [now.strftime("%m/%y")]
                 month_label = f"เดือน {current_month_str}"
             elif user_text == "สรุปเดือนที่แล้ว":
-                target_sheets = [last_month_date.strftime("%m/%y")]
+                target_sheets_names = [last_month_date.strftime("%m/%y")]
                 month_label = f"เดือน {last_month_str}"
             else:
-                target_sheets = [ws.title for ws in sh.worksheets()]
+                target_sheets_names = [ws.title for ws in sh.worksheets()]
                 month_label = "ทั้งหมด"
 
+            # ตัวแปรสำหรับคำนวณรายรับ/รายจ่าย เฉพาะเดือนที่เลือก
             total_income, total_expense = 0.0, 0.0
             total_monthly_paid, total_monthly_unpaid = 0.0, 0.0
-            
-            income_accounts, expense_accounts, monthly_accounts = {}, {}, {}
+            income_accounts_monthly, expense_accounts_monthly = {}, {}
             monthly_paid_cats, monthly_unpaid_cats = {}, {}
-            transfer_in_accounts, transfer_out_accounts = {}, {}
             
-            for s_name in target_sheets:
-                try:
-                    ws = sh.worksheet(s_name)
-                    rows = ws.get_all_values()
-                    for row in rows[1:]:
-                        if len(row) >= 4:
-                            try:
-                                amt = float(str(row[3]).replace(',', ''))
-                                record_type = row[2]
-                                account = row[4] if len(row) > 4 and row[4].strip() != "" else "-"
-                                cat = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
-                                
+            # ตัวแปรสำหรับยอดเงินคงเหลือสะสม จาก 'ทุกแท็บ'
+            income_accounts_all, expense_accounts_all, monthly_accounts_all = {}, {}, {}
+            transfer_in_all, transfer_out_all = {}, {}
+            
+            for ws in sh.worksheets():
+                rows = ws.get_all_values()
+                is_target_month = (ws.title in target_sheets_names)
+                
+                for row in rows[1:]:
+                    if len(row) >= 4:
+                        try:
+                            amt = float(str(row[3]).replace(',', ''))
+                            record_type = row[2]
+                            account = row[4] if len(row) > 4 and row[4].strip() != "" else "-"
+                            cat = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
+                            
+                            # คำนวณยอดเงินสะสม (เพื่อหายอดคงเหลือรวม)
+                            if record_type == "รายรับ": 
+                                income_accounts_all[account] = income_accounts_all.get(account, 0) + amt
+                            elif record_type == "รายจ่าย": 
+                                expense_accounts_all[account] = expense_accounts_all.get(account, 0) + amt
+                            elif record_type == "รายจ่ายต้องชำระต่อเดือน":
+                                status = row[8] if len(row) > 8 and row[8].strip() != "" else "จ่ายแล้ว"
+                                if status != "ยังไม่จ่าย":
+                                    paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
+                                    if paid_account != "-":
+                                        monthly_accounts_all[paid_account] = monthly_accounts_all.get(paid_account, 0) + amt
+                            elif record_type == "ย้ายเงิน":
+                                src_acc = account
+                                dst_acc = cat
+                                if src_acc != "-": transfer_out_all[src_acc] = transfer_out_all.get(src_acc, 0) + amt
+                                if dst_acc != "-": transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
+
+                            # คำนวณรายรับรายจ่ายเฉพาะเดือนนั้นๆ (เพื่อแสดงผล)
+                            if is_target_month:
                                 if record_type == "รายรับ": 
                                     total_income += amt
-                                    income_accounts[account] = income_accounts.get(account, 0) + amt
+                                    income_accounts_monthly[account] = income_accounts_monthly.get(account, 0) + amt
                                 elif record_type == "รายจ่าย": 
                                     total_expense += amt
-                                    expense_accounts[account] = expense_accounts.get(account, 0) + amt
+                                    expense_accounts_monthly[account] = expense_accounts_monthly.get(account, 0) + amt
                                 elif record_type == "รายจ่ายต้องชำระต่อเดือน":
                                     status = row[8] if len(row) > 8 and row[8].strip() != "" else "จ่ายแล้ว"
                                     if status == "ยังไม่จ่าย":
@@ -195,39 +220,31 @@ def handle_text_message(event):
                                     else:
                                         total_monthly_paid += amt
                                         monthly_paid_cats[cat] = monthly_paid_cats.get(cat, 0) + amt
-                                        paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
-                                        if paid_account != "-":
-                                            monthly_accounts[paid_account] = monthly_accounts.get(paid_account, 0) + amt
-                                elif record_type == "ย้ายเงิน":
-                                    src_acc = account
-                                    dst_acc = cat
-                                    if src_acc != "-": transfer_out_accounts[src_acc] = transfer_out_accounts.get(src_acc, 0) + amt
-                                    if dst_acc != "-": transfer_in_accounts[dst_acc] = transfer_in_accounts.get(dst_acc, 0) + amt
-                            except ValueError:
-                                pass
-                except gspread.exceptions.WorksheetNotFound:
-                    pass
+                        except ValueError:
+                            pass
             
-            balance = total_income - total_expense - total_monthly_paid
-            
-            all_accounts = set(income_accounts.keys()) | set(expense_accounts.keys()) | set(monthly_accounts.keys()) | set(transfer_in_accounts.keys()) | set(transfer_out_accounts.keys())
+            # สรุปยอดคงเหลือสะสม
+            all_accounts = set(income_accounts_all.keys()) | set(expense_accounts_all.keys()) | set(monthly_accounts_all.keys()) | set(transfer_in_all.keys()) | set(transfer_out_all.keys())
             balance_accounts = {}
+            total_balance = 0.0
+            
             for acc in all_accounts:
                 if acc == "-": continue
-                bal = (income_accounts.get(acc, 0.0) 
-                       - expense_accounts.get(acc, 0.0) 
-                       - monthly_accounts.get(acc, 0.0) 
-                       + transfer_in_accounts.get(acc, 0.0) 
-                       - transfer_out_accounts.get(acc, 0.0))
+                bal = (income_accounts_all.get(acc, 0.0) 
+                       - expense_accounts_all.get(acc, 0.0) 
+                       - monthly_accounts_all.get(acc, 0.0) 
+                       + transfer_in_all.get(acc, 0.0) 
+                       - transfer_out_all.get(acc, 0.0))
                 balance_accounts[acc] = bal
+                total_balance += bal
             
             reply_msg = f"📊 สรุปบัญชี ({month_label}):\n\n"
             reply_msg += f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
-            for acc, amt in income_accounts.items():
+            for acc, amt in income_accounts_monthly.items():
                 if acc != "-": reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
             reply_msg += f"\n🔴 รายจ่ายทั่วไป: {total_expense:,.2f} บาท\n"
-            for acc, amt in expense_accounts.items():
+            for acc, amt in expense_accounts_monthly.items():
                 if acc != "-": reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
             reply_msg += f"\n🟡 บิลต้องชำระ (จ่ายแล้ว): {total_monthly_paid:,.2f} บาท\n"
@@ -237,10 +254,10 @@ def handle_text_message(event):
                 reply_msg += f"\n⭕ บิลค้างชำระ (ยังไม่จ่าย): {total_monthly_unpaid:,.2f} บาท\n"
                 for c, amt in monthly_unpaid_cats.items(): reply_msg += f"   • {c}: {amt:,.2f}\n"
                 
-            reply_msg += f"\n💰 คงเหลือแต่ละบัญชี:\n"
+            reply_msg += f"\n💰 คงเหลือแต่ละบัญชี (สะสม):\n"
             for acc, amt in balance_accounts.items(): reply_msg += f"   • {acc}: {amt:,.2f}\n"
                 
-            reply_msg += f"\n💵 ยอดคงเหลือรวมสุทธิ: {balance:,.2f} บาท"
+            reply_msg += f"\n💵 ยอดคงเหลือรวมสุทธิ: {total_balance:,.2f} บาท"
             
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
             return
@@ -343,13 +360,11 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="หมวดหมู่คืออะไรครับ? 👇", quick_reply=QuickReply(items=items)))
                 return
                 
-            # 🔵 สำหรับจังหวะเลือกบัญชีปลายทางของการ "ย้ายเงิน"
             if len(last_row) > 5 and last_row[5] == "รอระบุบัญชีปลายทาง":
                 worksheet.update_cell(last_row_index, 6, user_text)
                 worksheet.update_cell(last_row_index, 9, "-")
                 worksheet.update_cell(last_row_index, 10, "-")
                 
-                # แปลงยอดเงินเป็นตัวเลขก่อนทำการจัดรูปแบบป้องกัน Error
                 try:
                     transfer_amount = float(str(last_row[3]).replace(',', ''))
                 except ValueError:
@@ -410,7 +425,6 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกบิลเรียบร้อย! (หักเงินจากบัญชี {account_name} แล้ว)"))
                 return
 
-        # 🔵 ข้อความตอบกลับเมื่อพิมพ์ข้อความอื่นๆ ที่ไม่ได้ตั้งค่าไว้ (สุ่มตอบกวนๆ)
         cheeky_replies = [
             "แหมมม ทักมาซะตกใจ นึกว่าจะโอนเงินให้! 💸 ถ้าจะจดบัญชี พิมพ์ตัวเลขมาได้เลยจ้า",
             "จ้าาา รับทราบจ้า! แต่ถ้าจะให้จดบัญชี รบกวนพิมพ์เป็นตัวเลขนะจ๊ะตัวเอง 😆",
