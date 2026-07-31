@@ -80,10 +80,10 @@ def handle_text_message(event):
                             unpaid_bills.append((cat, row[3]))
             
             if not unpaid_bills:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🎉 เดือนนี้ไม่มีบิลค้างชำระครับ!"))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🎉 ไม่มีบิลค้างชำระครับ!"))
                 return
                 
-            reply_msg = "🧾 บิลที่ยังไม่จ่าย:\n"
+            reply_msg = "🧾 บิลที่ยังไม่จ่าย (รวมค้างชำระ):\n"
             items = []
             for cat, amt in unpaid_bills:
                 reply_msg += f"• {cat} : {amt} บาท\n"
@@ -116,7 +116,7 @@ def handle_text_message(event):
             chosen_account = parts[2]
             
             found = False
-            for ws in reversed(sh.worksheets()):  # ค้นหาจากแท็บเดือนล่าสุดย้อนกลับไป
+            for ws in reversed(sh.worksheets()):
                 rows = ws.get_all_values()
                 for i in range(len(rows)-1, 0, -1):
                     row = rows[i]
@@ -165,13 +165,11 @@ def handle_text_message(event):
                 target_sheets_names = [ws.title for ws in sh.worksheets()]
                 month_label = "ทั้งหมด"
 
-            # ตัวแปรสำหรับคำนวณรายรับ/รายจ่าย เฉพาะเดือนที่เลือก
             total_income, total_expense = 0.0, 0.0
             total_monthly_paid, total_monthly_unpaid = 0.0, 0.0
             income_accounts_monthly, expense_accounts_monthly = {}, {}
             monthly_paid_cats, monthly_unpaid_cats = {}, {}
             
-            # ตัวแปรสำหรับยอดเงินคงเหลือสะสม จาก 'ทุกแท็บ'
             income_accounts_all, expense_accounts_all, monthly_accounts_all = {}, {}, {}
             transfer_in_all, transfer_out_all = {}, {}
             
@@ -187,7 +185,6 @@ def handle_text_message(event):
                             account = row[4] if len(row) > 4 and row[4].strip() != "" else "-"
                             cat = row[5] if len(row) > 5 and row[5].strip() != "" else "ไม่ระบุหมวดหมู่"
                             
-                            # คำนวณยอดเงินสะสม (เพื่อหายอดคงเหลือรวม)
                             if record_type == "รายรับ": 
                                 income_accounts_all[account] = income_accounts_all.get(account, 0) + amt
                             elif record_type == "รายจ่าย": 
@@ -198,13 +195,19 @@ def handle_text_message(event):
                                     paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
                                     if paid_account != "-":
                                         monthly_accounts_all[paid_account] = monthly_accounts_all.get(paid_account, 0) + amt
+                                    
+                                # 🌟 สำคัญ: ดึงบิลที่ "ยังไม่จ่าย" จากทุกเดือนมาแสดงยอดค้างเสมอ
+                                if status == "ยังไม่จ่าย":
+                                    total_monthly_unpaid += amt
+                                    monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
+
                             elif record_type == "ย้ายเงิน":
                                 src_acc = account
                                 dst_acc = cat
                                 if src_acc != "-": transfer_out_all[src_acc] = transfer_out_all.get(src_acc, 0) + amt
                                 if dst_acc != "-": transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
 
-                            # คำนวณรายรับรายจ่ายเฉพาะเดือนนั้นๆ (เพื่อแสดงผล)
+                            # คำนวณรายรับ/รายจ่าย เฉพาะเดือนนั้นๆ (เพื่อแสดงผล)
                             if is_target_month:
                                 if record_type == "รายรับ": 
                                     total_income += amt
@@ -214,16 +217,13 @@ def handle_text_message(event):
                                     expense_accounts_monthly[account] = expense_accounts_monthly.get(account, 0) + amt
                                 elif record_type == "รายจ่ายต้องชำระต่อเดือน":
                                     status = row[8] if len(row) > 8 and row[8].strip() != "" else "จ่ายแล้ว"
-                                    if status == "ยังไม่จ่าย":
-                                        total_monthly_unpaid += amt
-                                        monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
-                                    else:
+                                    if status == "จ่ายแล้ว":
                                         total_monthly_paid += amt
                                         monthly_paid_cats[cat] = monthly_paid_cats.get(cat, 0) + amt
+
                         except ValueError:
                             pass
             
-            # สรุปยอดคงเหลือสะสม
             all_accounts = set(income_accounts_all.keys()) | set(expense_accounts_all.keys()) | set(monthly_accounts_all.keys()) | set(transfer_in_all.keys()) | set(transfer_out_all.keys())
             balance_accounts = {}
             total_balance = 0.0
@@ -251,7 +251,7 @@ def handle_text_message(event):
             for c, amt in monthly_paid_cats.items(): reply_msg += f"   • {c}: {amt:,.2f}\n"
                 
             if total_monthly_unpaid > 0:
-                reply_msg += f"\n⭕ บิลค้างชำระ (ยังไม่จ่าย): {total_monthly_unpaid:,.2f} บาท\n"
+                reply_msg += f"\n⭕ บิลค้างชำระสะสม (ยังไม่จ่าย): {total_monthly_unpaid:,.2f} บาท\n"
                 for c, amt in monthly_unpaid_cats.items(): reply_msg += f"   • {c}: {amt:,.2f}\n"
                 
             reply_msg += f"\n💰 คงเหลือแต่ละบัญชี (สะสม):\n"
