@@ -3,7 +3,7 @@ import requests
 import gspread
 import random
 from datetime import datetime, timezone, timedelta
-from flask import Flask, request, abort
+from flask import Flask, request, abort, render_template
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -13,9 +13,15 @@ from linebot.models import (
 
 app = Flask(__name__)
 
+# หน้าสำหรับ UptimeRobot
 @app.route("/")
 def home():
     return "Bot is awake and running!", 200
+
+# 🌟 หน้าสำหรับเปิดเว็บ Mini App (LIFF)
+@app.route("/app")
+def mini_app():
+    return render_template("index.html")
 
 # เชื่อมต่อกับ LINE บอท
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
@@ -68,7 +74,7 @@ def handle_text_message(event):
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%Y")
 
-        # 🟢 1. เช็คบิลที่ยังไม่จ่าย (สแกนหาบิลค้างชำระจาก "ทุกแท็บ")
+        # 🟢 1. เช็คบิลที่ยังไม่จ่าย
         if user_text.lower() == "bill":
             unpaid_bills = []
             for ws in sh.worksheets():
@@ -94,7 +100,7 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg, quick_reply=QuickReply(items=items)))
             return
 
-        # 🟢 2. ขั้นตอนเลือกบิลเพื่อไปเลือกบัญชีต่อ
+        # 🟢 2. เลือกบิลเพื่อไปเลือกบัญชีต่อ
         if user_text.startswith("อัปเดตบิล "):
             target_cat = user_text.replace("อัปเดตบิล ", "").strip()
             quick_reply = QuickReply(items=[
@@ -109,7 +115,7 @@ def handle_text_message(event):
             )
             return
 
-        # 🟢 3. บันทึกสถานะ "จ่ายแล้ว" พร้อมบัญชีที่จ่ายจริง (ค้นหาและอัปเดตจากทุกแท็บ)
+        # 🟢 3. บันทึกสถานะ "จ่ายแล้ว"
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
@@ -196,7 +202,6 @@ def handle_text_message(event):
                                     if paid_account != "-":
                                         monthly_accounts_all[paid_account] = monthly_accounts_all.get(paid_account, 0) + amt
                                     
-                                # 🌟 สำคัญ: ดึงบิลที่ "ยังไม่จ่าย" จากทุกเดือนมาแสดงยอดค้างเสมอ
                                 if status == "ยังไม่จ่าย":
                                     total_monthly_unpaid += amt
                                     monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
@@ -207,7 +212,6 @@ def handle_text_message(event):
                                 if src_acc != "-": transfer_out_all[src_acc] = transfer_out_all.get(src_acc, 0) + amt
                                 if dst_acc != "-": transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
 
-                            # คำนวณรายรับ/รายจ่าย เฉพาะเดือนนั้นๆ (เพื่อแสดงผล)
                             if is_target_month:
                                 if record_type == "รายรับ": 
                                     total_income += amt
