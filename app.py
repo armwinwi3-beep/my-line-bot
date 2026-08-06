@@ -46,6 +46,7 @@ def home():
 def mini_app():
     return render_template("index.html")
     
+# 🌟 ปรับปรุง API บันทึกข้อมูล ให้ยิงตรงเข้าชีตเดือนปัจจุบันแบบชัวร์ 100%
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
@@ -83,46 +84,60 @@ def api_add():
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
-        current_month_str = now.strftime("%m/%Y")
 
-        # 🌟 ลอจิกเคลียร์บิลข้ามเดือนอัจฉริยะ 
+        # ถ้าเป็นการจ่ายบิล ให้เช็คเคลียร์บิลเก่าในอดีต (ถ้ามี) เพื่อไม่ให้ซ้ำซ้อน
         if type_th == "รายจ่ายต้องชำระต่อเดือน" and status_val == "จ่ายแล้ว":
             sh = gc.open('MoneyBase')
-            found = False
-            updated_in_place = False
-            for ws in reversed(sh.worksheets()):
+            for ws in sh.worksheets():
                 rows = ws.get_all_values()
                 for i in range(len(rows)-1, 0, -1):
                     row = rows[i]
                     if len(row) >= 9:
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == category and row[8] == "ยังไม่จ่าย":
-                            if ws.title == current_month_str:
-                                # ถ้าค้างของเดือนนี้ ก็อัปเดตบรรทัดเดิมได้เลย
-                                ws.update_cell(i+1, 4, amount)
-                                ws.update_cell(i+1, 5, account)
-                                ws.update_cell(i+1, 8, note)
-                                ws.update_cell(i+1, 9, "จ่ายแล้ว")
-                                updated_in_place = True
-                            else:
-                                # 🌟 ถ้าค้างมาจากเดือนก่อนๆ ให้ปิดบิลเก่า แล้วยอมให้โค้ดสร้างบิลใหม่ในเดือนนี้
-                                ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
-                                ws.update_cell(i+1, 9, f"ย้ายยอดไปจ่ายเดือน {current_month_str}")
-                            found = True
+                            ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
+                            ws.update_cell(i+1, 9, "เคลียร์บิลแล้ว")
                             break
-                if found:
-                    break
-            
-            if updated_in_place:
-                return jsonify({"status": "success", "message": "อัปเดตบิลเรียบร้อย"})
-            else:
-                worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
-                return jsonify({"status": "success", "message": "บันทึกและเคลียร์บิลเรียบร้อย"})
-        else:
-            worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
-            return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
+
+        # บันทึกลงชีตปัจจุบันทันที
+        worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
+        return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/api/delete", methods=["POST"])
+def api_delete():
+    data = request.json
+    month = data.get('month') 
+    date_val = data.get('date')
+    amount = str(data.get('amount'))
+    category = data.get('category')
+    
+    try:
+        sh = gc.open('MoneyBase')
+        worksheets_to_check = [month] if month else [ws.title for ws in sh.worksheets()]
+        
+        deleted = False
+        for ws_name in worksheets_to_check:
+            try:
+                ws = sh.worksheet(ws_name)
+                rows = ws.get_all_values()
+                for i in range(len(rows)-1, 0, -1):
+                    row = rows[i]
+                    if len(row) >= 6:
+                        if row[0] == date_val and str(row[3]).replace(',', '') == amount and row[5] == category:
+                            ws.delete_rows(i + 1)
+                            deleted = True
+                            break
+            except Exception:
+                continue
+            if deleted: break
+            
+        if deleted:
+            return jsonify({"status": "success", "message": "ลบรายการสำเร็จ"})
+        else:
+            return jsonify({"status": "error", "message": "ไม่พบรายการที่ต้องการลบ"}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/data", methods=["GET"])
 def api_data():
@@ -133,7 +148,7 @@ def api_data():
             ws = sh.worksheet(month_str)
             rows = ws.get_all_values()
         except gspread.exceptions.WorksheetNotFound:
-            rows = []
+            return jsonify({"total_expense": 0, "total_income": 0, "records": []})
 
         total_expense = 0.0
         total_income = 0.0
@@ -151,7 +166,7 @@ def api_data():
                         note = row[7] if len(row) > 7 else "-"
                         status = row[8] if len(row) > 8 and str(row[8]).strip() != "" else "จ่ายแล้ว"
 
-                        if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status != "ยังไม่จ่าย"):
+                        if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status == "จ่ายแล้ว"):
                             total_expense += amt
                         elif record_type == "รายรับ":
                             total_income += amt
@@ -163,32 +178,11 @@ def api_data():
                             "category": cat,
                             "account": account,
                             "note": note,
-                            "status": status 
+                            "status": status,
+                            "sheet": month_str
                         })
                     except ValueError:
                         pass
-        
-        # 🌟 ดึงบิลค้างชำระจากเดือนที่แล้วๆ มาแสดงยกยอด
-        for past_ws in sh.worksheets():
-            if past_ws.title != month_str:
-                past_rows = past_ws.get_all_values()
-                for r in past_rows[1:]:
-                    if len(r) >= 9:
-                        if r[2] == "รายจ่ายต้องชำระต่อเดือน" and r[8] == "ยังไม่จ่าย":
-                            try:
-                                amt = float(str(r[3]).replace(',', ''))
-                                old_note = r[7] if len(r) > 7 and r[7] != "-" else ""
-                                records.append({
-                                    "date": r[0],
-                                    "type": "รายจ่ายต้องชำระต่อเดือน",
-                                    "amount": amt,
-                                    "category": r[5],
-                                    "account": r[4],
-                                    "note": f"ยกยอดจากเดือน {past_ws.title} " + old_note,
-                                    "status": "ยังไม่จ่าย"
-                                })
-                            except ValueError:
-                                pass
         
         return jsonify({
             "total_expense": total_expense, 
@@ -282,7 +276,6 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"เลือกบัญชีที่ใช้จ่ายบิล '{target_cat}' ครับ 👇", quick_reply=quick_reply))
             return
 
-        # 🌟 ลอจิกการจ่ายบิลข้ามเดือน (ผ่าน LINE Bot)
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
@@ -294,17 +287,11 @@ def handle_text_message(event):
                     row = rows[i]
                     if len(row) >= 9:
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
-                            old_amt = row[3]
-                            if ws.title == current_month_str:
-                                ws.update_cell(i+1, 5, chosen_account)
-                                ws.update_cell(i+1, 9, "จ่ายแล้ว")
-                                while len(ws.row_values(i+1)) < 10:
-                                    ws.update_cell(i+1, 10, "-")
-                                ws.update_cell(i+1, 10, chosen_account)
-                            else:
-                                ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
-                                ws.update_cell(i+1, 9, f"ย้ายไปจ่ายเดือน {current_month_str}")
-                                worksheet.append_row([date_str, time_str, "รายจ่ายต้องชำระต่อเดือน", old_amt, chosen_account, target_cat, "-", f"จ่ายบิลค้างชำระจากเดือน {ws.title}", "จ่ายแล้ว", "-"])
+                            ws.update_cell(i+1, 5, chosen_account)
+                            ws.update_cell(i+1, 9, "จ่ายแล้ว")
+                            while len(ws.row_values(i+1)) < 10:
+                                ws.update_cell(i+1, 10, "-")
+                            ws.update_cell(i+1, 10, chosen_account)
                             found = True
                             break
                 if found: break
@@ -567,7 +554,7 @@ def handle_text_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=random.choice(cheeky_replies)))
                 
     except Exception as e:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}"))
+        line_bot_api.reply_token(event.reply_token, TextSendMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}"))
 
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image_message(event):
@@ -608,11 +595,11 @@ def handle_image_message(event):
                 reply_msg = f"✅ อ่านสลิปสำเร็จ! (โอนออก: {amount} บาท)\n👇 เลือกบัญชีที่โอนด้านล่างนี้ได้เลยครับ"
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg, quick_reply=quick_reply))
             else:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ อ่านไม่สำเร็จครับ (รูปอาจจะไม่ใช่สลิป)"))
+                line_bot_api.reply_token(event.reply_token, TextSendMessage(text="❌ อ่านไม่สำเร็จครับ (รูปอาจจะไม่ใช่สลิป)"))
         else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ เชื่อมต่อ SlipOK ไม่ได้"))
+            line_bot_api.reply_token(event.reply_token, TextSendMessage(text="❌ เชื่อมต่อ SlipOK ไม่ได้"))
     except Exception as e:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ ผิดพลาด: {str(e)}"))
+        line_bot_api.reply_token(event.reply_token, TextSendMessage(text=f"❌ ผิดพลาด: {str(e)}"))
 
 if __name__ == "__main__":
     app.run(port=8080)
