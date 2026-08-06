@@ -43,22 +43,21 @@
 
         .top-bar { background-color: #FACC15; padding: 20px 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 24px; color: #1e293b; font-weight: bold; cursor: pointer; padding-bottom: 10px;}
-        .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; }
-        .tab { flex: 1; padding: 10px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; width: 100%; }
+        .tab { flex: 1; padding: 10px 5px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
         .tab.active { background-color: #0B192C; color: white; border-radius: 10px 10px 0 0; }
         .content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-bottom: 80px; }
         
         .amount-box { background-color: #11223A; border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 15px; }
         .amount-icon { font-size: 30px; font-weight: bold; }
-        .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; }
+        .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; } .color-bill { color: #f97316; }
         .amount-input { background: transparent; border: none; outline: none; color: white; font-size: 40px; width: 100%; font-weight: 300; }
         .amount-input::placeholder { color: #475569; }
         .currency { color: #475569; font-size: 30px; font-weight: 300; }
+        
         .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .form-box input, .form-box select { background: transparent; border: none; outline: none; color: white; font-size: 16px; width: 100%; }
         .form-box select { color: #60a5fa; appearance: none; }
-        
-        /* เปลี่ยนสี Option ใน dropdown ให้เป็นพื้นหลังมืดๆ ตัวหนังสือขาว */
         .form-box select option, .form-box select optgroup { background-color: #0B192C; color: white; }
 
         .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
@@ -98,17 +97,16 @@
     <!-- 2. หน้าบิลรายเดือน -->
     <div id="bills-page" class="page">
         <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
-            <div style="font-size:18px; font-weight:bold; color:#1e293b;">📋 บิลรายเดือน (ที่บันทึกแล้ว)</div>
+            <div style="font-size:18px; font-weight:bold; color:#1e293b;">📋 บิลรายเดือน</div>
         </div>
         <div class="content">
             <div class="insight-box" style="background: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 4px 15px rgba(234,88,12,0.3);">
-                <div class="insight-title">ยอดรวมบิลเดือนนี้</div>
+                <div class="insight-title">ยอดบิลชำระแล้วเดือนนี้</div>
                 <div style="font-size: 36px; font-weight: 700;" id="bills-total">... ฿</div>
             </div>
             <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithBill()">
-                + จดบิลรายเดือนเพิ่ม
+                + จดบิลเพิ่ม
             </button>
-            <h3 style="font-size:16px; margin-bottom:10px; color:#94a3b8;">รายการที่ชำระไปแล้วในเดือนนี้:</h3>
             <div id="bills-list"></div>
         </div>
     </div>
@@ -127,10 +125,12 @@
     <div id="form-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">✕</div>
+            <!-- 🌟 เพิ่มแท็บที่ 4: บิล -->
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('expense', this)">รายจ่าย</div>
                 <div class="tab" onclick="switchTab('income', this)">รายรับ</div>
                 <div class="tab" onclick="switchTab('transfer', this)">ย้ายเงิน</div>
+                <div class="tab" onclick="switchTab('bill', this)">บิล</div>
             </div>
         </div>
         <div class="content">
@@ -141,10 +141,17 @@
                 <div class="currency">฿</div>
             </div>
             <div class="form-box" id="categoryBox">
-                <select id="category">
-                    <!-- จะถูกเพิ่มด้วย Javascript -->
+                <select id="category"></select>
+            </div>
+            
+            <!-- 🌟 กล่องเลือกสถานะบิล (จะโชว์เฉพาะตอนเลือกแท็บ บิล) -->
+            <div class="form-box" id="statusBox" style="display: none;">
+                <select id="billStatus" style="color: #facc15; font-weight: bold;">
+                    <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
+                    <option value="จ่ายแล้ว">✅ จ่ายแล้ว</option>
                 </select>
             </div>
+
             <div class="form-box">
                 <input type="text" id="note" placeholder="เพิ่มโน้ต">
             </div>
@@ -197,7 +204,7 @@
             hideAllPages();
             document.getElementById('bills-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'flex';
-            document.getElementById('fab-button').style.display = 'flex';
+            document.getElementById('fab-button').style.display = 'flex'; 
             document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-bills').classList.add('active');
             renderBills(); 
@@ -220,8 +227,11 @@
         }
 
         function openFormWithBill() {
-            openForm();
-            // เปิดหน้าฟอร์มมาแล้ว ให้เลือกแท็บ "รายจ่าย" เสมอ และสามารถเลือกหมวดหมู่บิลได้เลย
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.display = 'none';
+            document.getElementById('fab-button').style.display = 'none';
+            switchTab('bill', document.querySelectorAll('.tab')[3]); // 🌟 ลัดเข้าแท็บบิลเลย
         }
 
         function updateDateDisplay() {
@@ -266,7 +276,7 @@
             }
         }
 
-        // หน้าแรก: 🌟 กรองบิลที่ยังไม่จ่ายออก
+        // หน้าแรก
         function renderRecords(records) {
             const container = document.getElementById('records-container');
             const validRecords = records.filter(r => r.status !== 'ยังไม่จ่าย');
@@ -316,40 +326,70 @@
             container.innerHTML = html;
         }
 
-        // หน้าบิล: 🌟 กรองเอาเฉพาะบิลที่จ่ายแล้ว
+        // หน้าบิล: 🌟 แยกค้างชำระ กับ จ่ายแล้วให้เห็นชัดๆ
         function renderBills() {
-            let totalBills = 0;
-            let billsHtml = '';
-            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status !== 'ยังไม่จ่าย');
+            let totalPaid = 0;
+            let totalUnpaid = 0;
+            let paidHtml = '';
+            let unpaidHtml = '';
+
+            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน');
 
             bills.forEach(b => {
-                totalBills += b.amount;
-                billsHtml += `
-                <div class="form-box" style="margin-bottom: 10px; cursor: default; justify-content: space-between;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="background: #ea580c; padding: 10px; border-radius: 10px; font-size:18px;">🧾</div>
-                        <div>
-                            <div style="font-weight: 500; font-size:14px;">${b.category}</div>
-                            <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
+                if (b.status === 'ยังไม่จ่าย') {
+                    totalUnpaid += b.amount;
+                    unpaidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; cursor: default; justify-content: space-between; border-left: 4px solid #ef4444;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (ค้างชำระ)</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date}</div>
+                            </div>
                         </div>
-                    </div>
-                    <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
-                </div>`;
+                        <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                    </div>`;
+                } else {
+                    totalPaid += b.amount;
+                    paidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; cursor: default; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px;">${b.category}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
+                            </div>
+                        </div>
+                        <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                    </div>`;
+                }
             });
 
-            if (bills.length === 0) billsHtml = '<div class="empty-state">เดือนนี้ยังไม่มีการบันทึกจ่ายบิลครับ</div>';
-            document.getElementById('bills-total').innerText = totalBills.toLocaleString('th-TH') + ' ฿';
-            document.getElementById('bills-list').innerHTML = billsHtml;
+            document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
+            
+            let finalHtml = '';
+            if (unpaidHtml !== '') {
+                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
+            }
+            
+            finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
+            if (paidHtml === '') {
+                finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
+            } else {
+                finalHtml += paidHtml;
+            }
+
+            document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
-        // หน้าสรุป: 🌟 กรองบิลที่ยังไม่จ่ายออก ไม่ให้มาปน
+        // หน้าสรุป
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
             let totalInc = 0;
 
             currentRecords.forEach(r => {
-                if(r.status === 'ยังไม่จ่าย') return; // 🌟 ข้ามบิลที่ยังไม่จ่าย
+                if(r.status === 'ยังไม่จ่าย') return; 
 
                 if(r.type.includes('รายจ่าย')) {
                     const cat = r.category || 'ไม่ระบุ';
@@ -399,6 +439,7 @@
 
         updateDateDisplay();
 
+        // 🌟 แท็บใหม่ 'บิล' (bill)
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -408,8 +449,11 @@
             const icon = document.getElementById('typeIcon');
             const catBox = document.getElementById('categoryBox');
             const tNote = document.getElementById('transferNote');
+            const sBox = document.getElementById('statusBox');
 
             icon.className = 'amount-icon'; 
+            sBox.style.display = 'none';
+
             if (type === 'expense') {
                 icon.innerText = '↑';
                 icon.classList.add('color-expense');
@@ -427,10 +471,16 @@
                 icon.classList.add('color-transfer');
                 catBox.style.display = 'none';
                 tNote.style.display = 'block';
+            } else if (type === 'bill') {
+                icon.innerText = '🧾';
+                icon.classList.add('color-bill');
+                catBox.style.display = 'flex';
+                tNote.style.display = 'none';
+                sBox.style.display = 'flex'; // 🌟 แสดงตัวเลือกสถานะ จ่ายแล้ว/ยังไม่จ่าย
+                updateCategoryOptions('bill');
             }
         }
 
-        // 🌟 อัปเดตตัวเลือกหมวดหมู่ ให้เลือกชื่อบิลตรงๆ จากเว็บได้เลย
         function updateCategoryOptions(type) {
             const select = document.getElementById('category');
             if (type === 'expense') {
@@ -439,22 +489,23 @@
                     <option value="อาหาร">🍔 อาหาร</option>
                     <option value="เดินทาง">🚗 เดินทาง</option>
                     <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
-                    <option value="ทั่วไป">ทั่วไป</option>
-                    <optgroup label="📋 บิลรายเดือน (บันทึกเป็นบิลอัตโนมัติ)">
-                        <option value="ShopeePay">🧡 ShopeePay</option>
-                        <option value="SEasyCash">💸 SEasyCash</option>
-                        <option value="SPayExtra">💳 SPayExtra</option>
-                        <option value="Internet">🌐 Internet</option>
-                        <option value="ค่าทำฟัน">🦷 ค่าทำฟัน</option>
-                        <option value="ประกันสังคม">🏥 ประกันสังคม</option>
-                        <option value="บิลอื่นๆ">บิลอื่นๆ</option>
-                    </optgroup>`;
-            } else {
+                    <option value="ทั่วไป">ทั่วไป</option>`;
+            } else if (type === 'income') {
                 select.innerHTML = `
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
                     <option value="เงินเดือน">💰 เงินเดือน</option>
                     <option value="จากพ่อแม่">พ่อแม่</option>
                     <option value="อื่นๆ">อื่นๆ</option>`;
+            } else if (type === 'bill') {
+                select.innerHTML = `
+                    <option value="" disabled selected>เลือกบิล</option>
+                    <option value="ShopeePay">🧡 ShopeePay</option>
+                    <option value="SEasyCash">💸 SEasyCash</option>
+                    <option value="SPayExtra">💳 SPayExtra</option>
+                    <option value="Internet">🌐 Internet</option>
+                    <option value="ค่าทำฟัน">🦷 ค่าทำฟัน</option>
+                    <option value="ประกันสังคม">🏥 ประกันสังคม</option>
+                    <option value="บิลอื่นๆ">บิลอื่นๆ</option>`;
             }
         }
 
@@ -462,6 +513,12 @@
             const amount = document.getElementById('amount').value;
             const category = document.getElementById('category').value;
             const note = document.getElementById('note').value;
+            let statusVal = '-';
+            
+            // 🌟 ถ้าเป็นแท็บบิล ให้ดึงค่าสถานะส่งไปด้วย
+            if (currentType === 'bill') {
+                statusVal = document.getElementById('billStatus').value;
+            }
 
             if(!amount) { alert("⚠️ กรุณาใส่จำนวนเงินด้วยครับ!"); return; }
             if(currentType !== 'transfer' && !category) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
@@ -475,7 +532,13 @@
                 const response = await fetch('/api/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: currentType, amount: amount, category: category, note: note })
+                    body: JSON.stringify({ 
+                        type: currentType, 
+                        amount: amount, 
+                        category: category, 
+                        note: note,
+                        status: statusVal // 🌟 แนบไปให้ Python
+                    })
                 });
                 const result = await response.json();
                 
