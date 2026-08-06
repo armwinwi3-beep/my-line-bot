@@ -18,19 +18,15 @@
         /* การ์ดสีเหลืองด้านบน */
         .yellow-card { background-color: #FACC15; color: #1e293b; padding: 20px; border-radius: 15px; margin: 20px 15px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
-        .month-selector span { cursor: pointer; }
+        .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
+        .month-selector span:hover { opacity: 0.7; }
         .expense-summary { display: flex; justify-content: space-between; align-items: flex-end; }
         .expense-text { font-size: 14px; font-weight: 500; margin-bottom: 5px; }
         .expense-amount { font-size: 32px; font-weight: 700; line-height: 1; }
         .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
         
-        /* แบนเนอร์ส่งออกข้อมูล (ตกแต่ง) */
-        .banner { background-color: #fef08a; margin: 0 15px; padding: 15px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; color: #1e293b; font-size: 14px; margin-top: -10px; z-index: 0; position: relative; }
-        .banner-text { font-weight: 600; }
-        .banner-sub { color: #2563eb; font-size: 12px; }
-        
         /* รายการวันนี้ */
-        .daily-section { display: flex; margin-top: 20px; border-top: 1px solid #1e293b; }
+        .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
         .daily-sidebar { width: 60px; text-align: center; padding-top: 15px; border-left: 4px solid #FACC15; color: #FACC15; }
         .daily-text { font-size: 12px; }
         .daily-number { font-size: 20px; font-weight: bold; }
@@ -50,7 +46,7 @@
 
 
         /* ============================
-           หน้าฟอร์มจดบัญชี (Form Page) - ซ่อนไว้ตอนแรก
+           หน้าฟอร์มจดบัญชี (Form Page)
            ============================ */
         #form-page { height: 100vh; display: none; flex-direction: column; background-color: #0B192C; }
         
@@ -88,9 +84,9 @@
         <!-- การ์ดเหลือง -->
         <div class="yellow-card">
             <div class="month-selector">
-                <span>&lt;</span>
+                <span onclick="changeMonth(-1)">&lt;</span>
                 <span id="monthYearDisplay">📅 ส.ค. 69</span>
-                <span>&gt;</span>
+                <span onclick="changeMonth(1)">&gt;</span>
             </div>
             <div class="expense-summary">
                 <div>
@@ -104,16 +100,7 @@
             </div>
         </div>
 
-        <!-- แบนเนอร์ (ตกแต่ง) -->
-        <div class="banner">
-            <div>
-                <div class="banner-text">ส่งออกข้อมูล 📊</div>
-                <div class="banner-sub">อัปเกรดเป็นโปรเพื่อใช้งาน</div>
-            </div>
-            <div style="cursor:pointer;">✕</div>
-        </div>
-
-        <!-- รายการของวันนี้ -->
+        <!-- รายการของวันนี้ (ลบแบนเนอร์ออกแล้วขยับขึ้นมา) -->
         <div class="daily-section">
             <div class="daily-sidebar">
                 <div class="daily-text">วันนี้</div>
@@ -199,18 +186,39 @@
     </div>
 
     <script>
-        // เซ็ตวันที่และเดือนภาษาไทยอัตโนมัติ
+        // ข้อมูลวันที่พื้นฐาน
         const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
-        const now = new Date();
-        const d = now.getDate();
-        const m = thMonths[now.getMonth()];
-        const y = (now.getFullYear() + 543).toString().slice(-2);
-        const dayName = thDays[now.getDay()];
+        
+        let currentDate = new Date(); // วันนี้จริงๆ 
+        let viewDate = new Date(); // วันที่สำหรับเลื่อนดูเดือนอื่นๆ
 
-        document.getElementById('monthYearDisplay').innerText = `📅 ${m} ${y}`;
-        document.getElementById('todayDateNumber').innerText = d;
-        document.getElementById('formDateDisplay').innerText = `📅 ${dayName} ${d} ${m} ${y}`;
+        // ฟังก์ชันอัปเดตหน้าจอวันที่
+        function updateDateDisplay() {
+            // อัปเดตเดือนตรงหัวข้อการ์ด (สามารถเปลี่ยนไปมาได้)
+            const viewM = thMonths[viewDate.getMonth()];
+            const viewY = (viewDate.getFullYear() + 543).toString().slice(-2);
+            document.getElementById('monthYearDisplay').innerText = `📅 ${viewM} ${viewY}`;
+
+            // อัปเดตวันที่วันนี้ (ยึดตามวันจริงเสมอ)
+            const d = currentDate.getDate();
+            const currM = thMonths[currentDate.getMonth()];
+            const currY = (currentDate.getFullYear() + 543).toString().slice(-2);
+            const dayName = thDays[currentDate.getDay()];
+            
+            document.getElementById('todayDateNumber').innerText = d;
+            document.getElementById('formDateDisplay').innerText = `📅 ${dayName} ${d} ${currM} ${currY}`;
+        }
+
+        // ฟังก์ชันเมื่อกดลูกศรเปลี่ยนเดือน
+        function changeMonth(direction) {
+            viewDate.setMonth(viewDate.getMonth() + direction);
+            updateDateDisplay();
+            // TODO: สเตปต่อไปคือเขียนคำสั่งดึงข้อมูลรายเดือนจาก Python มาแสดงตรงนี้ครับ
+        }
+
+        // เรียกใช้อัปเดตวันครั้งแรกตอนโหลดหน้า
+        updateDateDisplay();
 
         // ระบบเปิด/ปิดฟอร์ม
         function openForm() {
