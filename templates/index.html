@@ -9,11 +9,9 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Thai', sans-serif; }
         body { background-color: #0B192C; color: white; height: 100vh; overflow: hidden; position: relative; }
         
-        /* โครงสร้างหน้า (Page Routing) */
         .page { height: 100vh; display: none; flex-direction: column; }
         .page.active { display: flex; }
         
-        /* ส่วนประกอบทั่วไป */
         .yellow-card { background-color: #FACC15; color: #1e293b; padding: 20px; border-radius: 15px; margin: 20px 15px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
         .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
@@ -23,7 +21,6 @@
         .expense-amount { font-size: 32px; font-weight: 700; line-height: 1; }
         .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
         
-        /* พื้นที่แสดงรายการ */
         .records-container { flex: 1; overflow-y: auto; padding-bottom: 90px; }
         .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
         .daily-sidebar { width: 60px; text-align: center; padding-top: 15px; border-left: 4px solid #FACC15; color: #FACC15; }
@@ -36,17 +33,14 @@
         .transaction-cat { color: white; font-weight: 500; }
         .transaction-sub { color: #94a3b8; font-size: 12px; margin-top: 2px; }
 
-        /* ปุ่มลอย "จดเพิ่ม" */
         .fab-container { position: absolute; bottom: 80px; width: 100%; display: flex; justify-content: center; z-index: 50; }
         .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; }
         
-        /* แถบเมนูด้านล่างสุด */
         .bottom-nav { background-color: white; height: 60px; display: flex; position: absolute; bottom: 0; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 40; }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 12px; cursor: pointer; }
         .nav-item.active { color: #0066FF; font-weight: 600; }
         .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-        /* หน้าฟอร์ม & สรุป & บิล */
         .top-bar { background-color: #FACC15; padding: 20px 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 24px; color: #1e293b; font-weight: bold; cursor: pointer; padding-bottom: 10px;}
         .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; }
@@ -54,7 +48,6 @@
         .tab.active { background-color: #0B192C; color: white; border-radius: 10px 10px 0 0; }
         .content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-bottom: 80px; }
         
-        /* สไตล์ฟอร์ม */
         .amount-box { background-color: #11223A; border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 15px; }
         .amount-icon { font-size: 30px; font-weight: bold; }
         .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; }
@@ -64,9 +57,12 @@
         .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .form-box input, .form-box select { background: transparent; border: none; outline: none; color: white; font-size: 16px; width: 100%; }
         .form-box select { color: #60a5fa; appearance: none; }
+        
+        /* เปลี่ยนสี Option ใน dropdown ให้เป็นพื้นหลังมืดๆ ตัวหนังสือขาว */
+        .form-box select option, .form-box select optgroup { background-color: #0B192C; color: white; }
+
         .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
 
-        /* สไตล์พิเศษหน้าสรุป / หน้าบิล */
         .insight-box { padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; }
         .insight-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .cat-item { margin-bottom: 15px; }
@@ -77,9 +73,7 @@
 </head>
 <body>
 
-    <!-- ==========================================
-         1. หน้าหลัก (Home Page)
-         ========================================== -->
+    <!-- 1. หน้าหลัก -->
     <div id="home-page" class="page active">
         <div class="yellow-card">
             <div class="month-selector">
@@ -98,43 +92,28 @@
                 </button>
             </div>
         </div>
-
-        <div class="records-container" id="records-container">
-            <div class="empty-state">กำลังโหลดข้อมูล...</div>
-        </div>
+        <div class="records-container" id="records-container"></div>
     </div>
 
-
-    <!-- ==========================================
-         2. หน้าบิลรายเดือน (Bills Page)
-         ========================================== -->
+    <!-- 2. หน้าบิลรายเดือน -->
     <div id="bills-page" class="page">
         <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
             <div style="font-size:18px; font-weight:bold; color:#1e293b;">📋 บิลรายเดือน (ที่บันทึกแล้ว)</div>
         </div>
         <div class="content">
-            <!-- กล่องโชว์ยอดบิลรวม -->
             <div class="insight-box" style="background: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 4px 15px rgba(234,88,12,0.3);">
                 <div class="insight-title">ยอดรวมบิลเดือนนี้</div>
                 <div style="font-size: 36px; font-weight: 700;" id="bills-total">... ฿</div>
             </div>
-            
-            <!-- 🌟 ปุ่มลัดสำหรับจดบิลรายเดือนโดยเฉพาะ -->
             <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithBill()">
                 + จดบิลรายเดือนเพิ่ม
             </button>
-
             <h3 style="font-size:16px; margin-bottom:10px; color:#94a3b8;">รายการที่ชำระไปแล้วในเดือนนี้:</h3>
-            <div id="bills-list">
-                <!-- ข้อมูลบิลจะโชว์ตรงนี้ -->
-            </div>
+            <div id="bills-list"></div>
         </div>
     </div>
 
-
-    <!-- ==========================================
-         3. หน้าสรุปพฤติกรรม (Summary Page)
-         ========================================== -->
+    <!-- 3. หน้าสรุป -->
     <div id="summary-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">‹ กลับ</div>
@@ -144,10 +123,7 @@
         <div class="content" id="summary-content"></div>
     </div>
 
-
-    <!-- ==========================================
-         4. หน้าฟอร์มจดบัญชี (Form Page)
-         ========================================== -->
+    <!-- 4. หน้าฟอร์ม -->
     <div id="form-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">✕</div>
@@ -166,11 +142,7 @@
             </div>
             <div class="form-box" id="categoryBox">
                 <select id="category">
-                    <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
-                    <option value="อาหาร">🍔 อาหาร</option>
-                    <option value="เดินทาง">🚗 เดินทาง</option>
-                    <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
-                    <option value="ทั่วไป">ทั่วไป</option>
+                    <!-- จะถูกเพิ่มด้วย Javascript -->
                 </select>
             </div>
             <div class="form-box">
@@ -183,15 +155,13 @@
         </div>
     </div>
 
-    <!-- ปุ่มลอย "จดเพิ่ม" -->
+    <!-- ปุ่มลอย & เมนู -->
     <div class="fab-container" id="fab-button">
         <button class="fab-btn" onclick="openForm()">
             <svg style="width: 20px; height: 20px; stroke: white; fill: none; stroke-width: 2;" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             จดเพิ่ม | ∧
         </button>
     </div>
-
-    <!-- แถบเมนูด้านล่างสุด (Shared Navigation) -->
     <div class="bottom-nav" id="main-nav">
         <div class="nav-item active" id="nav-home" onclick="openHome()">
             <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -211,10 +181,7 @@
         let viewDate = new Date(); 
         let currentRecords = [];
 
-        // ---------------- ระบบ Routing เปลี่ยนหน้า ----------------
-        function hideAllPages() {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        }
+        function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
         function openHome() {
             hideAllPages();
@@ -230,7 +197,7 @@
             hideAllPages();
             document.getElementById('bills-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'flex';
-            document.getElementById('fab-button').style.display = 'flex'; // 🌟 โชว์ปุ่มลอยในหน้าบิลด้วย
+            document.getElementById('fab-button').style.display = 'flex';
             document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-bills').classList.add('active');
             renderBills(); 
@@ -249,23 +216,14 @@
             document.getElementById('form-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'none';
             document.getElementById('fab-button').style.display = 'none';
-            
-            // รีเซ็ตแท็บฟอร์มให้กลับไปหน้า 'รายจ่าย' เสมอเมื่อเปิดใหม่แบบปกติ
             switchTab('expense', document.querySelectorAll('.tab')[0]);
         }
 
-        // 🌟 ฟังก์ชันเปิดฟอร์มแบบ "ล็อกเป้า" ให้เลือกบิลรายเดือนอัตโนมัติ
         function openFormWithBill() {
-            hideAllPages();
-            document.getElementById('form-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'none';
-            document.getElementById('fab-button').style.display = 'none';
-            
-            switchTab('expense', document.querySelectorAll('.tab')[0]); // เปลี่ยนไปแท็บรายจ่าย
-            document.getElementById('category').value = "รายจ่ายต้องชำระต่อเดือน"; // เลือกหมวดหมู่ให้เลย
+            openForm();
+            // เปิดหน้าฟอร์มมาแล้ว ให้เลือกแท็บ "รายจ่าย" เสมอ และสามารถเลือกหมวดหมู่บิลได้เลย
         }
 
-        // ---------------- ระบบข้อมูล (Data & Date) ----------------
         function updateDateDisplay() {
             const viewM = thMonths[viewDate.getMonth()];
             const viewY = (viewDate.getFullYear() + 543).toString().slice(-2);
@@ -287,7 +245,6 @@
 
         async function fetchMonthData() {
             document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
-            
             const m = String(viewDate.getMonth() + 1).padStart(2, '0');
             const y = String(viewDate.getFullYear()).slice(-2);
             const monthStr = `${m}/${y}`; 
@@ -299,7 +256,6 @@
                 currentRecords = data.records || []; 
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
                 
-                // ถ้ายืนอยู่หน้าแรกให้วาดหน้าแรก, ถ้ายืนอยู่หน้าบิลให้วาดบิลใหม่
                 if (document.getElementById('home-page').classList.contains('active')) {
                     renderRecords(currentRecords);
                 } else if (document.getElementById('bills-page').classList.contains('active')) {
@@ -310,16 +266,18 @@
             }
         }
 
-        // วาดหน้าแรก
+        // หน้าแรก: 🌟 กรองบิลที่ยังไม่จ่ายออก
         function renderRecords(records) {
             const container = document.getElementById('records-container');
-            if (!records || records.length === 0) {
+            const validRecords = records.filter(r => r.status !== 'ยังไม่จ่าย');
+            
+            if (!validRecords || validRecords.length === 0) {
                 container.innerHTML = '<div class="empty-state">ไม่มีรายการในเดือนนี้</div>';
                 return;
             }
 
             const grouped = {};
-            records.forEach(r => {
+            validRecords.forEach(r => {
                 if (!grouped[r.date]) grouped[r.date] = { expense: 0, income: 0, items: [] };
                 if (r.type.includes('รายจ่าย')) grouped[r.date].expense += r.amount;
                 if (r.type === 'รายรับ') grouped[r.date].income += r.amount;
@@ -336,13 +294,9 @@
             sortedDates.forEach(date => {
                 const dayNum = parseInt(date.split('/')[0]);
                 const g = grouped[date];
-                
                 html += `
                 <div class="daily-section">
-                    <div class="daily-sidebar">
-                        <div class="daily-text">วันที่</div>
-                        <div class="daily-number">${dayNum}</div>
-                    </div>
+                    <div class="daily-sidebar"><div class="daily-text">วันที่</div><div class="daily-number">${dayNum}</div></div>
                     <div class="daily-content">
                         <div class="daily-header">
                             ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
@@ -350,10 +304,7 @@
                         </div>
                         ${g.items.map(item => `
                             <div class="transaction-item">
-                                <div>
-                                    <div class="transaction-cat">${item.category}</div>
-                                    <div class="transaction-sub">${item.account} ${item.note !== '-' ? `(${item.note})` : ''}</div>
-                                </div>
+                                <div><div class="transaction-cat">${item.category}</div><div class="transaction-sub">${item.account} ${item.note !== '-' ? `(${item.note})` : ''}</div></div>
                                 <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
                                     ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
                                 </div>
@@ -365,12 +316,11 @@
             container.innerHTML = html;
         }
 
-        // วาดหน้าบิลรายเดือน
+        // หน้าบิล: 🌟 กรองเอาเฉพาะบิลที่จ่ายแล้ว
         function renderBills() {
             let totalBills = 0;
             let billsHtml = '';
-            
-            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน');
+            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status !== 'ยังไม่จ่าย');
 
             bills.forEach(b => {
                 totalBills += b.amount;
@@ -387,21 +337,20 @@
                 </div>`;
             });
 
-            if (bills.length === 0) {
-                billsHtml = '<div class="empty-state">เดือนนี้ยังไม่มีการบันทึกจ่ายบิลครับ</div>';
-            }
-
+            if (bills.length === 0) billsHtml = '<div class="empty-state">เดือนนี้ยังไม่มีการบันทึกจ่ายบิลครับ</div>';
             document.getElementById('bills-total').innerText = totalBills.toLocaleString('th-TH') + ' ฿';
             document.getElementById('bills-list').innerHTML = billsHtml;
         }
 
-        // วาดหน้าสรุป
+        // หน้าสรุป: 🌟 กรองบิลที่ยังไม่จ่ายออก ไม่ให้มาปน
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
             let totalInc = 0;
 
             currentRecords.forEach(r => {
+                if(r.status === 'ยังไม่จ่าย') return; // 🌟 ข้ามบิลที่ยังไม่จ่าย
+
                 if(r.type.includes('รายจ่าย')) {
                     const cat = r.category || 'ไม่ระบุ';
                     expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
@@ -423,11 +372,8 @@
                 const percentTop = Math.round((topCat[1] / totalExp) * 100);
                 
                 let warning = '';
-                if(totalInc > 0 && totalExp > totalInc) {
-                    warning = `<div style="color:#fca5a5; margin-top:8px;">⚠️ ระวัง: เดือนนี้ใช้จ่ายเกินรายรับไปแล้วนะ!</div>`;
-                } else if (totalInc > 0 && totalExp <= (totalInc * 0.5)) {
-                    warning = `<div style="color:#86efac; margin-top:8px;">✨ ยอดเยี่ยม: ใช้เงินไม่ถึงครึ่งของรายรับ มีเงินเก็บแน่นอน!</div>`;
-                }
+                if(totalInc > 0 && totalExp > totalInc) warning = `<div style="color:#fca5a5; margin-top:8px;">⚠️ ระวัง: เดือนนี้ใช้จ่ายเกินรายรับไปแล้วนะ!</div>`;
+                else if (totalInc > 0 && totalExp <= (totalInc * 0.5)) warning = `<div style="color:#86efac; margin-top:8px;">✨ ยอดเยี่ยม: ใช้เงินไม่ถึงครึ่งของรายรับ มีเงินเก็บแน่นอน!</div>`;
 
                 insightHtml = `คุณหมดเงินไปกับ <b>${topCat[0]}</b> เยอะที่สุด คิดเป็น <b>${percentTop}%</b> ของรายจ่ายทั้งหมด ${warning}`;
 
@@ -435,13 +381,8 @@
                     const percent = Math.round((item[1] / totalExp) * 100);
                     return `
                     <div class="cat-item">
-                        <div class="cat-header">
-                            <span style="font-weight: 500;">${item[0]}</span>
-                            <span style="color: #f8fafc;">${item[1].toLocaleString('th-TH')} ฿</span>
-                        </div>
-                        <div class="cat-bar-bg">
-                            <div class="cat-bar-fill" style="width: ${percent}%;"></div>
-                        </div>
+                        <div class="cat-header"><span style="font-weight: 500;">${item[0]}</span><span style="color: #f8fafc;">${item[1].toLocaleString('th-TH')} ฿</span></div>
+                        <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: ${percent}%;"></div></div>
                     </div>`;
                 }).join('');
             }
@@ -458,7 +399,6 @@
 
         updateDateDisplay();
 
-        // ---------------- ระบบ Form สลับแท็บ ----------------
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -490,6 +430,7 @@
             }
         }
 
+        // 🌟 อัปเดตตัวเลือกหมวดหมู่ ให้เลือกชื่อบิลตรงๆ จากเว็บได้เลย
         function updateCategoryOptions(type) {
             const select = document.getElementById('category');
             if (type === 'expense') {
@@ -498,8 +439,16 @@
                     <option value="อาหาร">🍔 อาหาร</option>
                     <option value="เดินทาง">🚗 เดินทาง</option>
                     <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
-                    <option value="รายจ่ายต้องชำระต่อเดือน">บิลรายเดือน</option>
-                    <option value="ทั่วไป">ทั่วไป</option>`;
+                    <option value="ทั่วไป">ทั่วไป</option>
+                    <optgroup label="📋 บิลรายเดือน (บันทึกเป็นบิลอัตโนมัติ)">
+                        <option value="ShopeePay">🧡 ShopeePay</option>
+                        <option value="SEasyCash">💸 SEasyCash</option>
+                        <option value="SPayExtra">💳 SPayExtra</option>
+                        <option value="Internet">🌐 Internet</option>
+                        <option value="ค่าทำฟัน">🦷 ค่าทำฟัน</option>
+                        <option value="ประกันสังคม">🏥 ประกันสังคม</option>
+                        <option value="บิลอื่นๆ">บิลอื่นๆ</option>
+                    </optgroup>`;
             } else {
                 select.innerHTML = `
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
