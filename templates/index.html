@@ -140,6 +140,7 @@
                 <div class="currency">฿</div>
             </div>
             
+            <!-- กล่องบัญชีสำหรับ รายจ่าย, รายรับ, บิล -->
             <div class="form-box" id="accountBox">
                 <select id="account">
                     <option value="" disabled selected>เลือกบัญชี</option>
@@ -150,6 +151,7 @@
                 </select>
             </div>
 
+            <!-- กล่องโอนย้ายบัญชี (แสดงเฉพาะ ย้ายเงิน) -->
             <div id="transferAccountBox" style="display: none; flex-direction: column; gap: 15px;">
                 <div class="form-box">
                     <select id="sourceAccount">
@@ -172,10 +174,12 @@
                 </div>
             </div>
 
+            <!-- กล่องหมวดหมู่ -->
             <div class="form-box" id="categoryBox">
                 <select id="category"></select>
             </div>
             
+            <!-- กล่องสถานะ (เฉพาะบิล) -->
             <div class="form-box" id="statusBox" style="display: none;">
                 <select id="billStatus" style="color: #facc15; font-weight: bold;" onchange="toggleBillAccountBox()">
                     <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
@@ -378,7 +382,7 @@
                             <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
                             <div>
                                 <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (ค้างชำระ)</div>
-                                <div style="font-size: 12px; color: #94a3b8;">${b.date}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
                             </div>
                         </div>
                         <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
@@ -411,7 +415,6 @@
             document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
-        // 🌟 อัปเดตหน้าสรุป ใส่กราฟเปรียบเทียบรายรับ-รายจ่าย ไว้บนสุด
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -433,7 +436,6 @@
             let insightHtml = '';
             let barsHtml = '';
 
-            // สร้างกราฟเปรียบเทียบ รายรับ VS รายจ่าย
             let maxVal = Math.max(totalInc, totalExp);
             let incWidth = maxVal > 0 ? (totalInc / maxVal) * 100 : 0;
             let expWidth = maxVal > 0 ? (totalExp / maxVal) * 100 : 0;
