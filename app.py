@@ -46,7 +46,7 @@ def home():
 def mini_app():
     return render_template("index.html")
     
-# 🌟 ปรับปรุง API บันทึกข้อมูล ให้ยิงตรงเข้าชีตเดือนปัจจุบันแบบชัวร์ 100%
+# 🌟 ปรับปรุง API บันทึกข้อมูล ให้เรียก get_current_worksheet() แบบแม่นยำที่สุด
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
@@ -85,23 +85,10 @@ def api_add():
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # ถ้าเป็นการจ่ายบิล ให้เช็คเคลียร์บิลเก่าในอดีต (ถ้ามี) เพื่อไม่ให้ซ้ำซ้อน
-        if type_th == "รายจ่ายต้องชำระต่อเดือน" and status_val == "จ่ายแล้ว":
-            sh = gc.open('MoneyBase')
-            for ws in sh.worksheets():
-                rows = ws.get_all_values()
-                for i in range(len(rows)-1, 0, -1):
-                    row = rows[i]
-                    if len(row) >= 9:
-                        if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == category and row[8] == "ยังไม่จ่าย":
-                            ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
-                            ws.update_cell(i+1, 9, "เคลียร์บิลแล้ว")
-                            break
-
-        # บันทึกลงชีตปัจจุบันทันที
         worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
+        print("API Add Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/delete", methods=["POST"])
@@ -198,13 +185,16 @@ handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
 gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json')
 TH_TZ = timezone(timedelta(hours=7))
 
+# 🌟 ฟังก์ชันจัดการแท็บปัจจุบันที่สมบูรณ์และเสถียรที่สุด
 def get_current_worksheet():
     sh = gc.open('MoneyBase')
     now = datetime.now(TH_TZ)
-    sheet_name = now.strftime("%m/%y")
+    sheet_name = now.strftime("%m/%y") # เช่น '08/26'
+    
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
+        # ถ้ายังไม่มีแท็บของเดือนนี้ ให้พยายามก๊อปปี้จากเดือนที่แล้วมา
         first_day_this_month = now.replace(day=1)
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%y")
@@ -213,6 +203,7 @@ def get_current_worksheet():
             worksheet = prev_ws.duplicate(new_sheet_name=sheet_name)
             worksheet.batch_clear(["A2:J5000"])
         except gspread.exceptions.WorksheetNotFound:
+            # ถ้าไม่มีเดือนที่แล้วจริงๆ ให้สร้างใหม่พร้อมหัวตาราง
             worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
             headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
             worksheet.append_row(headers)
@@ -547,7 +538,7 @@ def handle_text_message(event):
             if user_text.startswith("จ่ายบิลผ่าน|"):
                 account_name = user_text.split("|")[1]
                 worksheet.update_cell(last_row_index, 10, account_name)
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกบิลเรียบร้อย! (หักเงินจากบัญชี {account_name} แล้ว)"))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บิลเรียบร้อย! (หักเงินจากบัญชี {account_name} แล้ว)"))
                 return
 
         cheeky_replies = ["แหมมม ทักมาซะตกใจ นึกว่าจะโอนเงินให้! 💸 ถ้าจะจดบัญชี พิมพ์ตัวเลขมาได้เลยจ้า", "จ้าาา รับทราบจ้า! แต่ถ้าจะให้จดบัญชี รบกวนพิมพ์เป็นตัวเลขนะจ๊ะตัวเอง 😆"]
