@@ -63,7 +63,6 @@
         .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
 
         .insight-box { padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; }
-        .insight-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .cat-item { margin-bottom: 15px; }
         .cat-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
         .cat-bar-bg { background-color: #1e293b; height: 8px; border-radius: 4px; overflow: hidden; }
@@ -101,7 +100,7 @@
         </div>
         <div class="content">
             <div class="insight-box" style="background: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 4px 15px rgba(234,88,12,0.3);">
-                <div class="insight-title">ยอดบิลชำระแล้วเดือนนี้</div>
+                <div class="insight-title" style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">ยอดบิลชำระแล้วเดือนนี้</div>
                 <div style="font-size: 36px; font-weight: 700;" id="bills-total">... ฿</div>
             </div>
             <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithBill()">
@@ -140,10 +139,9 @@
                 <div class="currency">฿</div>
             </div>
             
-            <!-- กล่องบัญชีสำหรับ รายจ่าย, รายรับ, บิล -->
             <div class="form-box" id="accountBox">
                 <select id="account">
-                    <option value="" disabled selected>เลือกบัญชี</option>
+                    <option value="" disabled selected>เลือกบัญชีที่ใช้จ่าย</option>
                     <option value="กสิกร">🟢 กสิกร</option>
                     <option value="กรุงไทย">🔵 กรุงไทย</option>
                     <option value="TrueMoney">🟠 TrueMoney</option>
@@ -151,7 +149,6 @@
                 </select>
             </div>
 
-            <!-- กล่องโอนย้ายบัญชี (แสดงเฉพาะ ย้ายเงิน) -->
             <div id="transferAccountBox" style="display: none; flex-direction: column; gap: 15px;">
                 <div class="form-box">
                     <select id="sourceAccount">
@@ -174,12 +171,10 @@
                 </div>
             </div>
 
-            <!-- กล่องหมวดหมู่ -->
             <div class="form-box" id="categoryBox">
                 <select id="category"></select>
             </div>
             
-            <!-- กล่องสถานะ (เฉพาะบิล) -->
             <div class="form-box" id="statusBox" style="display: none;">
                 <select id="billStatus" style="color: #facc15; font-weight: bold;" onchange="toggleBillAccountBox()">
                     <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
@@ -265,6 +260,15 @@
             document.getElementById('main-nav').style.display = 'none';
             document.getElementById('fab-button').style.display = 'none';
             switchTab('bill', document.querySelectorAll('.tab')[3]); 
+        }
+
+        // 🌟 ฟังก์ชันกดจ่ายบิลด่วนจากหน้าบิลค้างชำระ
+        function payUnpaidBill(categoryName, amountVal) {
+            openFormWithBill();
+            document.getElementById('amount').value = amountVal;
+            document.getElementById('category').value = categoryName;
+            document.getElementById('billStatus').value = 'จ่ายแล้ว';
+            toggleBillAccountBox();
         }
 
         function updateDateDisplay() {
@@ -376,12 +380,13 @@
             bills.forEach(b => {
                 if (b.status === 'ยังไม่จ่าย') {
                     totalUnpaid += b.amount;
+                    // 🌟 เพิ่ม onclick ให้การ์ดบิลค้างชำระ กดแล้วเด้งหน้าจ่ายเงินทันที
                     unpaidHtml += `
-                    <div class="form-box" style="margin-bottom: 10px; cursor: default; justify-content: space-between; border-left: 4px solid #ef4444;">
+                    <div class="form-box" onclick="payUnpaidBill('${b.category}', ${b.amount})" style="margin-bottom: 10px; cursor: pointer; justify-content: space-between; border-left: 4px solid #ef4444; transition: 0.2s;" onmouseover="this.style.background='#162e4d'" onmouseout="this.style.background='#11223A'">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
                             <div>
-                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (ค้างชำระ)</div>
+                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (คลิกเพื่อชำระเงิน 👆)</div>
                                 <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
                             </div>
                         </div>
@@ -406,7 +411,7 @@
             document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
             
             let finalHtml = '';
-            if (unpaidHtml !== '') finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
+            if (unpaidHtml !== '') finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿) - กดที่บิลเพื่อชำระ:</h3>` + unpaidHtml + `<br>`;
             
             finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
             if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
