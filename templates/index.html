@@ -140,7 +140,6 @@
                 <div class="currency">฿</div>
             </div>
             
-            <!-- 🌟 กล่องบัญชีสำหรับ รายจ่าย, รายรับ, บิล -->
             <div class="form-box" id="accountBox">
                 <select id="account">
                     <option value="" disabled selected>เลือกบัญชี</option>
@@ -151,7 +150,6 @@
                 </select>
             </div>
 
-            <!-- 🌟 กล่องโอนย้ายบัญชี (จะแสดงเฉพาะตอนคลิก ย้ายเงิน) -->
             <div id="transferAccountBox" style="display: none; flex-direction: column; gap: 15px;">
                 <div class="form-box">
                     <select id="sourceAccount">
@@ -162,7 +160,7 @@
                         <option value="เงินสด">💵 เงินสด</option>
                     </select>
                 </div>
-                <div style="text-align: center; color: #60a5fa;">⬇️ ย้ายเข้าบัญชี ⬇️</div>
+                <div style="text-align: center; color: #60a5fa; font-weight: bold;">⬇️ ย้ายเข้าบัญชี ⬇️</div>
                 <div class="form-box">
                     <select id="destinationAccount">
                         <option value="" disabled selected>ย้ายเข้าบัญชี (ปลายทาง)</option>
@@ -174,14 +172,12 @@
                 </div>
             </div>
 
-            <!-- กล่องหมวดหมู่ -->
             <div class="form-box" id="categoryBox">
                 <select id="category"></select>
             </div>
             
-            <!-- กล่องสถานะ (เฉพาะบิล) -->
             <div class="form-box" id="statusBox" style="display: none;">
-                <select id="billStatus" style="color: #facc15; font-weight: bold;">
+                <select id="billStatus" style="color: #facc15; font-weight: bold;" onchange="toggleBillAccountBox()">
                     <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
                     <option value="จ่ายแล้ว">✅ จ่ายแล้ว</option>
                 </select>
@@ -344,14 +340,21 @@
                             ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
                             ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
                         </div>
-                        ${g.items.map(item => `
+                        ${g.items.map(item => {
+                            let displayCat = item.category;
+                            let displaySub = `${item.account !== '-' ? item.account : ''} ${item.note !== '-' ? `(${item.note})` : ''}`.trim();
+                            if (item.type === 'ย้ายเงิน') {
+                                displayCat = '🔄 ย้ายเงิน';
+                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''}`;
+                            }
+                            return `
                             <div class="transaction-item">
-                                <div><div class="transaction-cat">${item.category}</div><div class="transaction-sub">${item.account} ${item.note !== '-' ? `(${item.note})` : ''}</div></div>
+                                <div><div class="transaction-cat">${displayCat}</div><div class="transaction-sub">${displaySub}</div></div>
                                 <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
                                     ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
                                 </div>
-                            </div>
-                        `).join('')}
+                            </div>`;
+                        }).join('')}
                     </div>
                 </div>`;
             });
@@ -408,6 +411,7 @@
             document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
+        // 🌟 อัปเดตหน้าสรุป ใส่กราฟเปรียบเทียบรายรับ-รายจ่าย ไว้บนสุด
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -428,6 +432,37 @@
             let sortedCats = Object.entries(expensesByCategory).sort((a,b) => b[1] - a[1]);
             let insightHtml = '';
             let barsHtml = '';
+
+            // สร้างกราฟเปรียบเทียบ รายรับ VS รายจ่าย
+            let maxVal = Math.max(totalInc, totalExp);
+            let incWidth = maxVal > 0 ? (totalInc / maxVal) * 100 : 0;
+            let expWidth = maxVal > 0 ? (totalExp / maxVal) * 100 : 0;
+
+            let comparisonHtml = `
+                <div class="insight-box" style="background: #11223A; box-shadow: none; border: 1px solid #1e293b;">
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 15px; color: white;">⚖️ ภาพรวมเดือนนี้</div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
+                            <span style="color: #22c55e;">รายรับ</span>
+                            <span style="color: #22c55e; font-weight: 600;">+${totalInc.toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="background-color: #22c55e; height: 100%; border-radius: 5px; width: ${incWidth}%; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
+                            <span style="color: #ef4444;">รายจ่าย</span>
+                            <span style="color: #ef4444; font-weight: 600;">-${totalExp.toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="background-color: #ef4444; height: 100%; border-radius: 5px; width: ${expWidth}%; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
             if(totalExp === 0) {
                 insightHtml = `เดือนนี้คุณยังไม่มีการใช้จ่ายเลยครับ ดีเยี่ยมมากๆ! 🎉`;
@@ -453,6 +488,7 @@
             }
 
             document.getElementById('summary-content').innerHTML = `
+                ${comparisonHtml}
                 <div class="insight-box" style="background: linear-gradient(135deg, #1e40af, #3b82f6); box-shadow: 0 4px 15px rgba(59,130,246,0.3);">
                     <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">💡 วิเคราะห์พฤติกรรม</div>
                     <div style="font-size: 14px; line-height: 1.5; font-weight: 300;">${insightHtml}</div>
@@ -464,7 +500,6 @@
 
         updateDateDisplay();
 
-        // 🌟 เปลี่ยนการสลับแท็บให้รองรับการซ่อน/แสดงกล่องบัญชี
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -473,8 +508,8 @@
 
             const icon = document.getElementById('typeIcon');
             const catBox = document.getElementById('categoryBox');
-            const accBox = document.getElementById('accountBox'); // กล่องบัญชีเดี่ยว
-            const transBox = document.getElementById('transferAccountBox'); // กล่องบัญชีย้ายเงินคู่
+            const accBox = document.getElementById('accountBox'); 
+            const transBox = document.getElementById('transferAccountBox'); 
             const sBox = document.getElementById('statusBox');
 
             icon.className = 'amount-icon'; 
@@ -504,7 +539,18 @@
                     icon.classList.add('color-bill');
                     sBox.style.display = 'flex'; 
                     updateCategoryOptions('bill');
+                    toggleBillAccountBox();
                 }
+            }
+        }
+
+        function toggleBillAccountBox() {
+            const status = document.getElementById('billStatus').value;
+            const accBox = document.getElementById('accountBox');
+            if (status === 'ยังไม่จ่าย') {
+                accBox.style.display = 'none';
+            } else {
+                accBox.style.display = 'flex';
             }
         }
 
@@ -546,7 +592,6 @@
 
             if(!amount) { alert("⚠️ กรุณาใส่จำนวนเงินด้วยครับ!"); return; }
 
-            // เช็คและเก็บข้อมูลให้ถูกต้องตามประเภท
             if (currentType === 'transfer') {
                 const srcAcc = document.getElementById('sourceAccount').value;
                 const destAcc = document.getElementById('destinationAccount').value;
@@ -561,7 +606,6 @@
                 
                 if(!cat) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
                 
-                // ถ้ายืนยันว่าจ่ายแล้ว หรือเป็นรายรับรายจ่ายปกติ ต้องเลือกบัญชี
                 const statusVal = currentType === 'bill' ? document.getElementById('billStatus').value : '-';
                 if ((currentType !== 'bill' || statusVal === 'จ่ายแล้ว') && !acc) {
                     alert("⚠️ กรุณาเลือกบัญชีด้วยครับ!"); return; 
