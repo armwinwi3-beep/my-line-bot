@@ -13,8 +13,41 @@ from linebot.models import (
 
 app = Flask(__name__)
 
+# 🌟 ตัวแปรเก็บสถานะ เพื่อไม่ให้มันสร้างชีตซ้ำทุกๆ 5 นาที
+last_checked_month = None
+
+# 🌟 อัปเกรดหน้า Home ให้แอบสร้างชีตล่วงหน้า
 @app.route("/")
 def home():
+    global last_checked_month
+    now = datetime.now(TH_TZ)
+    current_m = now.strftime("%m/%y")
+
+    # ถ้าถึงวันที่ 25 ของเดือนแล้ว และเดือนนี้ยังไม่ได้เตรียมชีตล่วงหน้า
+    if now.day >= 5 and last_checked_month != current_m:
+        try:
+            sh = gc.open('MoneyBase')
+            # คำนวณชื่อแท็บของเดือนหน้า (เช่น ถ้าตอนนี้ 08/26 จะได้ 09/26)
+            next_month_date = now.replace(day=28) + timedelta(days=5)
+            next_month_str = next_month_date.strftime("%m/%y")
+            
+            try:
+                # ลองหาว่ามีแท็บเดือนหน้ารออยู่หรือยัง
+                sh.worksheet(next_month_str)
+            except gspread.exceptions.WorksheetNotFound:
+                # ถ้ายังไม่มี ให้ก๊อปปี้แท็บของเดือนปัจจุบันไปเตรียมรอไว้เลย
+                try:
+                    curr_ws = sh.worksheet(current_m)
+                    new_ws = curr_ws.duplicate(new_sheet_name=next_month_str)
+                    new_ws.batch_clear(["A2:J5000"]) # ลบตัวเลขเก่าทิ้ง
+                except Exception:
+                    pass # ถ้าเดือนปัจจุบันก็ยังไม่มี ให้ข้ามไปก่อน
+                    
+            # บันทึกไว้ว่าเดือนนี้ได้ทำการเตรียมชีตล่วงหน้าเรียบร้อยแล้ว
+            last_checked_month = current_m
+        except Exception as e:
+            print("Error preparing next month:", e)
+
     return "Bot is awake and running!", 200
 
 @app.route("/app")
@@ -29,9 +62,9 @@ def api_add():
     category = data.get('category')
     note = data.get('note', '-')
     status_val = data.get('status', '-') 
-    account = data.get('account', '-') # 🌟 รับค่าบัญชี
-    source_acc = data.get('sourceAccount') # 🌟 สำหรับย้ายเงิน
-    dest_acc = data.get('destinationAccount') # 🌟 สำหรับย้ายเงิน
+    account = data.get('account', '-') 
+    source_acc = data.get('sourceAccount') 
+    dest_acc = data.get('destinationAccount') 
     
     if record_type == 'expense': 
         type_th = "รายจ่าย"
@@ -42,10 +75,12 @@ def api_add():
     elif record_type == 'transfer': 
         type_th = "ย้ายเงิน"
         status_val = "-"
-        account = source_acc  # ต้นทางให้อยู่ในคอลัมน์บัญชี
-        category = dest_acc   # ปลายทางให้อยู่ในคอลัมน์หมวดหมู่ (ตามระบบเดิมที่วางไว้)
+        account = source_acc  # บัญชีต้นทาง
+        category = dest_acc   # บัญชีปลายทาง
     elif record_type == 'bill': 
         type_th = "รายจ่ายต้องชำระต่อเดือน"
+        if status_val == "ยังไม่จ่าย":
+            account = "-" 
     else: 
         type_th = "ไม่ระบุ"
         
@@ -57,7 +92,7 @@ def api_add():
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # บันทึกลงชีต (อัปเดตให้ใส่ account แทนคำว่า รอระบุบัญชี)
+        # บันทึกลงชีต 
         worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
@@ -114,6 +149,7 @@ def api_data():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
 gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json')
@@ -123,13 +159,26 @@ def get_current_worksheet():
     sh = gc.open('MoneyBase')
     now = datetime.now(TH_TZ)
     sheet_name = now.strftime("%m/%y")
+    
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
-        headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
-        worksheet.append_row(headers)
+        # ระบบเก่า: ถ้าหาของเดือนนี้ไม่เจอ จะก๊อปปี้จากเดือนที่แล้ว
+        first_day_this_month = now.replace(day=1)
+        last_month_date = first_day_this_month - timedelta(days=1)
+        last_month_str = last_month_date.strftime("%m/%y")
+        
+        try:
+            prev_ws = sh.worksheet(last_month_str)
+            worksheet = prev_ws.duplicate(new_sheet_name=sheet_name)
+            worksheet.batch_clear(["A2:J5000"])
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
+            headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
+            worksheet.append_row(headers)
+            
     return worksheet
+
 
 @app.route("/webhook", methods=['POST'])
 def webhook():
@@ -445,7 +494,7 @@ def handle_text_message(event):
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="กสิกร", text="จ่ายบิลผ่าน|กสิกร")),
                         QuickReplyButton(action=MessageAction(label="กรุงไทย", text="จ่ายบิลผ่าน|กรุงไทย")),
-                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
+                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="จ่ายบิลผ่าน|TrueMoney")),
                         QuickReplyButton(action=MessageAction(label="เงินสด", text="จ่ายบิลผ่าน|เงินสด"))
                     ])
                     line_bot_api.reply_message(event.reply_token, TextSendMessage(text="จ่ายผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
