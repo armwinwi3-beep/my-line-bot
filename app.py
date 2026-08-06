@@ -21,7 +21,6 @@ def home():
     now = datetime.now(TH_TZ)
     current_m = now.strftime("%m/%y")
 
-    # แอบเตรียมชีตของเดือนหน้าล่วงหน้า ถ้าถึงวันที่ 25 แล้ว
     if now.day >= 25 and last_checked_month != current_m:
         try:
             sh = gc.open('MoneyBase')
@@ -84,29 +83,46 @@ def api_add():
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
+        current_month_str = now.strftime("%m/%Y")
 
-        # 🌟 ลอจิกใหม่: ถ้ากด "จ่ายแล้ว" จากเว็บ ให้ไปเช็คว่ามีบิลค้างในอดีตไหม ถ้ามีให้ขีดฆ่าทิ้ง (ป้องกันซ้ำซ้อน)
+        # 🌟 ลอจิกเคลียร์บิลข้ามเดือนอัจฉริยะ 
         if type_th == "รายจ่ายต้องชำระต่อเดือน" and status_val == "จ่ายแล้ว":
             sh = gc.open('MoneyBase')
+            found = False
+            updated_in_place = False
             for ws in reversed(sh.worksheets()):
                 rows = ws.get_all_values()
-                cleared = False
                 for i in range(len(rows)-1, 0, -1):
                     row = rows[i]
                     if len(row) >= 9:
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == category and row[8] == "ยังไม่จ่าย":
-                            # ปิดบัญชีบิลเก่า
-                            ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
-                            ws.update_cell(i+1, 9, "เคลียร์บิลแล้ว")
-                            cleared = True
-                            break 
-                if cleared:
+                            if ws.title == current_month_str:
+                                # ถ้าค้างของเดือนนี้ ก็อัปเดตบรรทัดเดิมได้เลย
+                                ws.update_cell(i+1, 4, amount)
+                                ws.update_cell(i+1, 5, account)
+                                ws.update_cell(i+1, 8, note)
+                                ws.update_cell(i+1, 9, "จ่ายแล้ว")
+                                updated_in_place = True
+                            else:
+                                # 🌟 ถ้าค้างมาจากเดือนก่อนๆ ให้ปิดบิลเก่า แล้วยอมให้โค้ดสร้างบิลใหม่ในเดือนนี้
+                                ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
+                                ws.update_cell(i+1, 9, f"ย้ายยอดไปจ่ายเดือน {current_month_str}")
+                            found = True
+                            break
+                if found:
                     break
-
-        worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
-        return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
+            
+            if updated_in_place:
+                return jsonify({"status": "success", "message": "อัปเดตบิลเรียบร้อย"})
+            else:
+                worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
+                return jsonify({"status": "success", "message": "บันทึกและเคลียร์บิลเรียบร้อย"})
+        else:
+            worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
+            return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route("/api/data", methods=["GET"])
 def api_data():
@@ -117,39 +133,62 @@ def api_data():
             ws = sh.worksheet(month_str)
             rows = ws.get_all_values()
         except gspread.exceptions.WorksheetNotFound:
-            return jsonify({"total_expense": 0, "total_income": 0, "records": []})
+            rows = []
 
         total_expense = 0.0
         total_income = 0.0
         records = []
 
-        for row in rows[1:]:
-            if len(row) >= 6:
-                try:
-                    amt = float(str(row[3]).replace(',', ''))
-                    record_type = row[2]
-                    date_val = row[0]
-                    account = row[4]
-                    cat = row[5]
-                    note = row[7] if len(row) > 7 else "-"
-                    status = row[8] if len(row) > 8 and str(row[8]).strip() != "" else "จ่ายแล้ว"
+        if rows:
+            for row in rows[1:]:
+                if len(row) >= 6:
+                    try:
+                        amt = float(str(row[3]).replace(',', ''))
+                        record_type = row[2]
+                        date_val = row[0]
+                        account = row[4]
+                        cat = row[5]
+                        note = row[7] if len(row) > 7 else "-"
+                        status = row[8] if len(row) > 8 and str(row[8]).strip() != "" else "จ่ายแล้ว"
 
-                    if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status != "ยังไม่จ่าย"):
-                        total_expense += amt
-                    elif record_type == "รายรับ":
-                        total_income += amt
+                        if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status != "ยังไม่จ่าย"):
+                            total_expense += amt
+                        elif record_type == "รายรับ":
+                            total_income += amt
 
-                    records.append({
-                        "date": date_val,
-                        "type": record_type,
-                        "amount": amt,
-                        "category": cat,
-                        "account": account,
-                        "note": note,
-                        "status": status 
-                    })
-                except ValueError:
-                    pass
+                        records.append({
+                            "date": date_val,
+                            "type": record_type,
+                            "amount": amt,
+                            "category": cat,
+                            "account": account,
+                            "note": note,
+                            "status": status 
+                        })
+                    except ValueError:
+                        pass
+        
+        # 🌟 ดึงบิลค้างชำระจากเดือนที่แล้วๆ มาแสดงยกยอด
+        for past_ws in sh.worksheets():
+            if past_ws.title != month_str:
+                past_rows = past_ws.get_all_values()
+                for r in past_rows[1:]:
+                    if len(r) >= 9:
+                        if r[2] == "รายจ่ายต้องชำระต่อเดือน" and r[8] == "ยังไม่จ่าย":
+                            try:
+                                amt = float(str(r[3]).replace(',', ''))
+                                old_note = r[7] if len(r) > 7 and r[7] != "-" else ""
+                                records.append({
+                                    "date": r[0],
+                                    "type": "รายจ่ายต้องชำระต่อเดือน",
+                                    "amount": amt,
+                                    "category": r[5],
+                                    "account": r[4],
+                                    "note": f"ยกยอดจากเดือน {past_ws.title} " + old_note,
+                                    "status": "ยังไม่จ่าย"
+                                })
+                            except ValueError:
+                                pass
         
         return jsonify({
             "total_expense": total_expense, 
@@ -169,14 +208,12 @@ def get_current_worksheet():
     sh = gc.open('MoneyBase')
     now = datetime.now(TH_TZ)
     sheet_name = now.strftime("%m/%y")
-    
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
         first_day_this_month = now.replace(day=1)
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%y")
-        
         try:
             prev_ws = sh.worksheet(last_month_str)
             worksheet = prev_ws.duplicate(new_sheet_name=sheet_name)
@@ -185,7 +222,6 @@ def get_current_worksheet():
             worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
             headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
             worksheet.append_row(headers)
-            
     return worksheet
 
 
@@ -246,13 +282,12 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"เลือกบัญชีที่ใช้จ่ายบิล '{target_cat}' ครับ 👇", quick_reply=quick_reply))
             return
 
-        # 🌟 ลอจิกการเคลียร์บิลข้ามเดือน ผ่านคำสั่ง LINE
+        # 🌟 ลอจิกการจ่ายบิลข้ามเดือน (ผ่าน LINE Bot)
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
             chosen_account = parts[2]
             found = False
-            
             for ws in reversed(sh.worksheets()):
                 rows = ws.get_all_values()
                 for i in range(len(rows)-1, 0, -1):
@@ -261,26 +296,20 @@ def handle_text_message(event):
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
                             old_amt = row[3]
                             if ws.title == current_month_str:
-                                # ถ้าบิลค้างนั้นอยู่ใน "เดือนปัจจุบัน" (อัปเดตบรรทัดเดิมได้เลย)
-                                ws.update_cell(i+1, 5, chosen_account) # อัปเดตบัญชีที่ตัดเงิน
+                                ws.update_cell(i+1, 5, chosen_account)
                                 ws.update_cell(i+1, 9, "จ่ายแล้ว")
                                 while len(ws.row_values(i+1)) < 10:
                                     ws.update_cell(i+1, 10, "-")
                                 ws.update_cell(i+1, 10, chosen_account)
                             else:
-                                # 🌟 ถ้าเป็นการจ่ายบิล "ข้ามเดือน"
-                                # 1. เปลี่ยนสถานะบิลในเดือนเก่าไม่ให้มาคำนวณซ้ำ
                                 ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
-                                ws.update_cell(i+1, 9, "ย้ายไปจ่ายเดือนปัจจุบัน")
-                                # 2. นำยอดมาบันทึกในแท็บเดือนปัจจุบันแทน เพื่อให้บัญชีเดือนนี้ตรง
-                                worksheet.append_row([date_str, time_str, "รายจ่ายต้องชำระต่อเดือน", old_amt, chosen_account, target_cat, "-", "จ่ายบิลค้างชำระจากเดือนเก่า", "จ่ายแล้ว", "-"])
-                            
+                                ws.update_cell(i+1, 9, f"ย้ายไปจ่ายเดือน {current_month_str}")
+                                worksheet.append_row([date_str, time_str, "รายจ่ายต้องชำระต่อเดือน", old_amt, chosen_account, target_cat, "-", f"จ่ายบิลค้างชำระจากเดือน {ws.title}", "จ่ายแล้ว", "-"])
                             found = True
                             break
                 if found: break
-                
             if found:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ อัปเดตบิล '{target_cat}' เป็น 'จ่ายแล้ว' (จ่ายผ่านบัญชี {chosen_account}) เรียบร้อย หักยอดเงินสำเร็จ!"))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ อัปเดตบิล '{target_cat}' เป็น 'จ่ายแล้ว' (หักบัญชี {chosen_account}) เรียบร้อย!"))
             else:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ ไม่พบบิล '{target_cat}' ที่ยังไม่จ่ายครับ"))
             return
