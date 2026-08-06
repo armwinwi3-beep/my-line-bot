@@ -28,7 +28,10 @@ def api_add():
     amount = data.get('amount')
     category = data.get('category')
     note = data.get('note', '-')
-    status_val = data.get('status', '-') # 🌟 รับค่าสถานะจากเว็บมาด้วย
+    status_val = data.get('status', '-') 
+    account = data.get('account', '-') # 🌟 รับค่าบัญชี
+    source_acc = data.get('sourceAccount') # 🌟 สำหรับย้ายเงิน
+    dest_acc = data.get('destinationAccount') # 🌟 สำหรับย้ายเงิน
     
     if record_type == 'expense': 
         type_th = "รายจ่าย"
@@ -39,9 +42,10 @@ def api_add():
     elif record_type == 'transfer': 
         type_th = "ย้ายเงิน"
         status_val = "-"
+        account = source_acc  # ต้นทางให้อยู่ในคอลัมน์บัญชี
+        category = dest_acc   # ปลายทางให้อยู่ในคอลัมน์หมวดหมู่ (ตามระบบเดิมที่วางไว้)
     elif record_type == 'bill': 
         type_th = "รายจ่ายต้องชำระต่อเดือน"
-        # status_val ใช้ตามที่เว็บส่งมา (จ่ายแล้ว / ยังไม่จ่าย)
     else: 
         type_th = "ไม่ระบุ"
         
@@ -53,8 +57,8 @@ def api_add():
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # บันทึกลงชีต (คอลัมน์สถานะจะอยู่ตำแหน่งที่ 8 index 8)
-        worksheet.append_row([date_str, time_str, type_th, amount, "รอระบุบัญชี", category, "-", note, status_val, "-"])
+        # บันทึกลงชีต (อัปเดตให้ใส่ account แทนคำว่า รอระบุบัญชี)
+        worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -441,7 +445,7 @@ def handle_text_message(event):
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="กสิกร", text="จ่ายบิลผ่าน|กสิกร")),
                         QuickReplyButton(action=MessageAction(label="กรุงไทย", text="จ่ายบิลผ่าน|กรุงไทย")),
-                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="จ่ายบิลผ่าน|TrueMoney")),
+                        QuickReplyButton(action=MessageAction(label="TrueMoney", text="TrueMoney")),
                         QuickReplyButton(action=MessageAction(label="เงินสด", text="จ่ายบิลผ่าน|เงินสด"))
                     ])
                     line_bot_api.reply_message(event.reply_token, TextSendMessage(text="จ่ายผ่านบัญชีไหนครับ? 👇", quick_reply=quick_reply))
