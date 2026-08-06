@@ -43,8 +43,8 @@
         .nav-item.active { color: #0066FF; font-weight: 600; }
         .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-        /* หน้าฟอร์มจดบัญชี (Form Page) */
-        #form-page { height: 100vh; display: none; flex-direction: column; background-color: #0B192C; }
+        /* หน้าฟอร์ม (Form Page) */
+        #form-page, #summary-page { height: 100vh; display: none; flex-direction: column; background-color: #0B192C; }
         .top-bar { background-color: #FACC15; padding: 20px 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 24px; color: #1e293b; font-weight: bold; cursor: pointer; padding-bottom: 10px;}
         .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; }
@@ -63,11 +63,25 @@
         .form-box select { color: #60a5fa; appearance: none; }
         .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
         .transfer-note { color: #94a3b8; font-size: 12px; text-align: center; margin-top: 10px; display: none; }
+
+        /* สไตล์พิเศษสำหรับหน้าสรุป (Summary Page) */
+        .insight-box { background: linear-gradient(135deg, #1e40af, #3b82f6); padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
+        .insight-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .insight-text { font-size: 14px; line-height: 1.5; font-weight: 300; }
+        
+        .cat-item { margin-bottom: 15px; }
+        .cat-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
+        .cat-name { font-weight: 500; }
+        .cat-amt { color: #f8fafc; }
+        .cat-bar-bg { background-color: #1e293b; height: 8px; border-radius: 4px; overflow: hidden; }
+        .cat-bar-fill { background-color: #FACC15; height: 100%; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-    <!-- หน้าหลัก (Home Page) -->
+    <!-- ==========================================
+         หน้าหลัก (Home Page)
+         ========================================== -->
     <div id="home-page">
         <div class="yellow-card">
             <div class="month-selector">
@@ -80,14 +94,14 @@
                     <div class="expense-text">ยอดใช้จ่าย</div>
                     <div class="expense-amount" id="displayTotalExpense">... ฿</div>
                 </div>
-                <button class="summary-btn" onclick="alert('เดี๋ยวเอาไว้โชว์สรุปสวยๆ ครับ')">
+                <!-- 🌟 กดปุ่มนี้แล้วไปหน้าสรุป -->
+                <button class="summary-btn" onclick="openSummary()">
                     <svg style="width: 16px; height: 16px; fill: white;" viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
                     ดูสรุป
                 </button>
             </div>
         </div>
 
-        <!-- คอนเทนเนอร์แสดงรายการของเดือนที่เลือก -->
         <div id="records-container">
             <div class="empty-state">กำลังโหลดข้อมูล...</div>
         </div>
@@ -111,7 +125,26 @@
         </div>
     </div>
 
-    <!-- หน้าฟอร์มจดบัญชี (Form Page) -->
+
+    <!-- ==========================================
+         หน้าสรุปพฤติกรรม (Summary Page)
+         ========================================== -->
+    <div id="summary-page">
+        <div class="top-bar">
+            <!-- ปุ่มกดกลับไปหน้าแรก -->
+            <div class="close-btn" onclick="closeSummary()">‹ กลับ</div>
+            <div style="font-size:18px; font-weight:bold; color:#1e293b; padding-bottom:10px;">📊 สรุปพฤติกรรม</div>
+            <div style="width: 40px;"></div> <!-- ดันให้หัวข้ออยู่ตรงกลาง -->
+        </div>
+        <div class="content" id="summary-content">
+            <!-- จะถูกใส่ข้อมูลด้วย Javascript ตอนกดเปิดหน้า -->
+        </div>
+    </div>
+
+
+    <!-- ==========================================
+         หน้าฟอร์มจดบัญชี (Form Page)
+         ========================================== -->
     <div id="form-page">
         <div class="top-bar">
             <div class="close-btn" onclick="closeForm()">✕</div>
@@ -155,6 +188,7 @@
         
         let currentDate = new Date(); 
         let viewDate = new Date(); 
+        let currentRecords = []; // 🌟 เก็บข้อมูลชั่วคราวเพื่อเอาไปทำหน้าสรุป
 
         function updateDateDisplay() {
             const viewM = thMonths[viewDate.getMonth()];
@@ -180,14 +214,16 @@
             
             const m = String(viewDate.getMonth() + 1).padStart(2, '0');
             const y = String(viewDate.getFullYear()).slice(-2);
-            const monthStr = `${m}/${y}`; // ตัวอย่าง 08/26
+            const monthStr = `${m}/${y}`; 
 
             try {
                 const response = await fetch(`/api/data?month=${monthStr}`);
                 const data = await response.json();
                 
+                currentRecords = data.records || []; // เก็บลงตัวแปร
+
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
-                renderRecords(data.records);
+                renderRecords(currentRecords);
             } catch (error) {
                 document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
             }
@@ -200,7 +236,6 @@
                 return;
             }
 
-            // จัดกลุ่มรายการตามวันที่
             const grouped = {};
             records.forEach(r => {
                 if (!grouped[r.date]) grouped[r.date] = { expense: 0, income: 0, items: [] };
@@ -209,7 +244,6 @@
                 grouped[r.date].items.push(r);
             });
 
-            // เรียงวันที่จากใหม่ไปเก่า
             const sortedDates = Object.keys(grouped).sort((a, b) => {
                 const [d1, m1, y1] = a.split('/');
                 const [d2, m2, y2] = b.split('/');
@@ -251,7 +285,88 @@
 
         updateDateDisplay();
 
-        // ---------------- ระบบ Form ----------------
+        // ---------------- ระบบ Summary (หน้าสรุป) ----------------
+        function openSummary() {
+            document.getElementById('home-page').style.display = 'none';
+            document.getElementById('summary-page').style.display = 'flex';
+            
+            // คำนวณข้อมูล
+            let expensesByCategory = {};
+            let totalExp = 0;
+            let totalInc = 0;
+
+            currentRecords.forEach(r => {
+                if(r.type.includes('รายจ่าย')) {
+                    const cat = r.category || 'ไม่ระบุ';
+                    expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
+                    totalExp += r.amount;
+                } else if(r.type === 'รายรับ') {
+                    totalInc += r.amount;
+                }
+            });
+
+            // เรียงจากจ่ายมากไปน้อย
+            let sortedCats = Object.entries(expensesByCategory).sort((a,b) => b[1] - a[1]);
+            
+            let insightHtml = '';
+            let barsHtml = '';
+
+            if(totalExp === 0) {
+                insightHtml = `เดือนนี้คุณยังไม่มีการใช้จ่ายเลยครับ ดีเยี่ยมมากๆ! 🎉`;
+                barsHtml = `<div class="empty-state">ยังไม่มีข้อมูลการใช้จ่าย</div>`;
+            } else {
+                // สร้างคำแนะนำพฤติกรรม
+                const topCat = sortedCats[0];
+                const percentTop = Math.round((topCat[1] / totalExp) * 100);
+                
+                let warning = '';
+                if(totalInc > 0 && totalExp > totalInc) {
+                    warning = `<div style="color:#fca5a5; margin-top:8px;">⚠️ ระวัง: เดือนนี้ใช้จ่ายเกินรายรับไปแล้วนะ!</div>`;
+                } else if (totalInc > 0 && totalExp <= (totalInc * 0.5)) {
+                    warning = `<div style="color:#86efac; margin-top:8px;">✨ ยอดเยี่ยม: ใช้เงินไม่ถึงครึ่งของรายรับ มีเงินเก็บแน่นอน!</div>`;
+                }
+
+                insightHtml = `คุณหมดเงินไปกับ <b>${topCat[0]}</b> เยอะที่สุดเลยนะ คิดเป็น <b>${percentTop}%</b> ของรายจ่ายทั้งหมด ${warning}`;
+
+                // สร้างกราฟแท่ง
+                barsHtml = sortedCats.map(item => {
+                    const catName = item[0];
+                    const catAmt = item[1];
+                    const percent = Math.round((catAmt / totalExp) * 100);
+                    
+                    return `
+                    <div class="cat-item">
+                        <div class="cat-header">
+                            <span class="cat-name">${catName}</span>
+                            <span class="cat-amt">${catAmt.toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div class="cat-bar-bg">
+                            <div class="cat-bar-fill" style="width: ${percent}%;"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            const contentDiv = document.getElementById('summary-content');
+            contentDiv.innerHTML = `
+                <div class="insight-box">
+                    <div class="insight-title">
+                        <svg style="width: 20px; height: 20px; fill: white;" viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+                        วิเคราะห์พฤติกรรม
+                    </div>
+                    <div class="insight-text">${insightHtml}</div>
+                </div>
+                <h3 style="font-size:16px; margin-bottom:15px; color:#94a3b8;">ใช้จ่ายไปกับอะไรบ้าง?</h3>
+                <div>${barsHtml}</div>
+            `;
+        }
+
+        function closeSummary() {
+            document.getElementById('summary-page').style.display = 'none';
+            document.getElementById('home-page').style.display = 'flex';
+        }
+
+        // ---------------- ระบบ Form (จดเพิ่ม) ----------------
         function openForm() {
             document.getElementById('home-page').style.display = 'none';
             document.getElementById('form-page').style.display = 'flex';
@@ -260,7 +375,7 @@
         function closeForm() {
             document.getElementById('form-page').style.display = 'none';
             document.getElementById('home-page').style.display = 'flex';
-            fetchMonthData(); // รีเฟรชข้อมูลใหม่ตอนปิดฟอร์ม
+            fetchMonthData(); 
         }
 
         let currentType = 'expense';
