@@ -3,7 +3,7 @@ import requests
 import gspread
 import random
 from datetime import datetime, timezone, timedelta
-from flask import Flask, request, abort, render_template
+from flask import Flask, request, abort, render_template, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -22,6 +22,84 @@ def home():
 @app.route("/app")
 def mini_app():
     return render_template("index.html")
+    
+# 🌟 API สำหรับรับข้อมูลจากหน้าเว็บเพื่อบันทึกลง Sheet
+@app.route("/api/add", methods=["POST"])
+def api_add():
+    data = request.json
+    record_type = data.get('type')
+    amount = data.get('amount')
+    category = data.get('category')
+    note = data.get('note', '-')
+    
+    if record_type == 'expense': type_th = "รายจ่าย"
+    elif record_type == 'income': type_th = "รายรับ"
+    elif record_type == 'transfer': type_th = "ย้ายเงิน"
+    else: type_th = "ไม่ระบุ"
+        
+    if not category: category = "-"
+
+    try:
+        worksheet = get_current_worksheet()
+        now = datetime.now(TH_TZ)
+        date_str = now.strftime("%d/%m/%Y")
+        time_str = now.strftime("%H:%M:%S")
+
+        # บันทึกลงชีต (วันที่, เวลา, ประเภท, ยอดเงิน, บัญชี, หมวดหมู่, ผู้โอน, ผู้รับ(โน้ต), สถานะบิล, บัญชีที่จ่าย)
+        worksheet.append_row([date_str, time_str, type_th, amount, "รอระบุบัญชี", category, "-", note, "-", "-"])
+        return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# 🌟 API สำหรับดึงข้อมูลแต่ละเดือนมาแสดงบนเว็บ
+@app.route("/api/data", methods=["GET"])
+def api_data():
+    month_str = request.args.get('month') # รูปแบบเช่น '08/26'
+    try:
+        sh = gc.open('MoneyBase')
+        try:
+            ws = sh.worksheet(month_str)
+            rows = ws.get_all_values()
+        except gspread.exceptions.WorksheetNotFound:
+            return jsonify({"total_expense": 0, "total_income": 0, "records": []})
+
+        total_expense = 0.0
+        total_income = 0.0
+        records = []
+
+        for row in rows[1:]:
+            if len(row) >= 6:
+                try:
+                    amt = float(str(row[3]).replace(',', ''))
+                    record_type = row[2]
+                    date_val = row[0]
+                    account = row[4]
+                    cat = row[5]
+                    note = row[7] if len(row) > 7 else "-"
+
+                    if record_type in ["รายจ่าย", "รายจ่ายต้องชำระต่อเดือน"]:
+                        total_expense += amt
+                    elif record_type == "รายรับ":
+                        total_income += amt
+
+                    records.append({
+                        "date": date_val,
+                        "type": record_type,
+                        "amount": amt,
+                        "category": cat,
+                        "account": account,
+                        "note": note
+                    })
+                except ValueError:
+                    pass
+        
+        return jsonify({
+            "total_expense": total_expense, 
+            "total_income": total_income, 
+            "records": records
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # เชื่อมต่อกับ LINE บอท
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
