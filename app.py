@@ -13,17 +13,14 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# หน้าสำหรับ UptimeRobot
 @app.route("/")
 def home():
     return "Bot is awake and running!", 200
 
-# 🌟 หน้าสำหรับเปิดเว็บ Mini App (LIFF)
 @app.route("/app")
 def mini_app():
     return render_template("index.html")
     
-# 🌟 API สำหรับรับข้อมูลจากหน้าเว็บเพื่อบันทึกลง Sheet
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
@@ -39,22 +36,27 @@ def api_add():
         
     if not category: category = "-"
 
+    # 🌟 เช็คว่าเป็นหมวดหมู่บิลหรือไม่ ถ้าใช่ให้เซ็ตเป็นรายจ่ายรายเดือน
+    monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"]
+    status_val = "-"
+    if type_th == "รายจ่าย" and category in monthly_bill_cats:
+        type_th = "รายจ่ายต้องชำระต่อเดือน"
+        status_val = "จ่ายแล้ว"
+
     try:
         worksheet = get_current_worksheet()
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # บันทึกลงชีต (วันที่, เวลา, ประเภท, ยอดเงิน, บัญชี, หมวดหมู่, ผู้โอน, ผู้รับ(โน้ต), สถานะบิล, บัญชีที่จ่าย)
-        worksheet.append_row([date_str, time_str, type_th, amount, "รอระบุบัญชี", category, "-", note, "-", "-"])
+        worksheet.append_row([date_str, time_str, type_th, amount, "รอระบุบัญชี", category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# 🌟 API สำหรับดึงข้อมูลแต่ละเดือนมาแสดงบนเว็บ
 @app.route("/api/data", methods=["GET"])
 def api_data():
-    month_str = request.args.get('month') # รูปแบบเช่น '08/26'
+    month_str = request.args.get('month') 
     try:
         sh = gc.open('MoneyBase')
         try:
@@ -76,8 +78,10 @@ def api_data():
                     account = row[4]
                     cat = row[5]
                     note = row[7] if len(row) > 7 else "-"
+                    # 🌟 ดึงสถานะบิลมาเช็คด้วย (ถ้าไม่มีให้ถือว่าจ่ายแล้ว)
+                    status = row[8] if len(row) > 8 and str(row[8]).strip() != "" else "จ่ายแล้ว"
 
-                    if record_type in ["รายจ่าย", "รายจ่ายต้องชำระต่อเดือน"]:
+                    if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status != "ยังไม่จ่าย"):
                         total_expense += amt
                     elif record_type == "รายรับ":
                         total_income += amt
@@ -88,7 +92,8 @@ def api_data():
                         "amount": amt,
                         "category": cat,
                         "account": account,
-                        "note": note
+                        "note": note,
+                        "status": status  # 🌟 ส่งสถานะกลับไปให้เว็บด้วย
                     })
                 except ValueError:
                     pass
@@ -101,28 +106,21 @@ def api_data():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# เชื่อมต่อกับ LINE บอท
 line_bot_api = LineBotApi('ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('1716fc54190bf6b7177ba7d80d3b07af')
-
-# เชื่อมต่อกับ Google Sheets
 gc = gspread.service_account(filename='cedar-abacus-503815-i0-be6261b65bfd.json')
-
-# 🕒 ตั้งค่าเวลาประเทศไทย (UTC+7)
 TH_TZ = timezone(timedelta(hours=7))
 
 def get_current_worksheet():
     sh = gc.open('MoneyBase')
     now = datetime.now(TH_TZ)
     sheet_name = now.strftime("%m/%y")
-    
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
         worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=10)
         headers = ["วันที่", "เวลา", "ประเภท (รายรับ/รายจ่าย)", "ยอดเงิน", "บัญชี (เงินสด / กสิกร / กรุงไทย / TrueMoney)", "หมวดหมู่", "ผู้โอน", "ผู้รับ", "สถานะบิล", "บัญชีที่จ่าย"]
         worksheet.append_row(headers)
-        
     return worksheet
 
 @app.route("/webhook", methods=['POST'])
@@ -138,21 +136,17 @@ def webhook():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     user_text = event.message.text.strip()
-    
     try:
         sh = gc.open('MoneyBase')
         worksheet = get_current_worksheet()
-        
         now = datetime.now(TH_TZ)
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
-
         current_month_str = now.strftime("%m/%Y")
         first_day_this_month = now.replace(day=1)
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%Y")
 
-        # 🟢 1. เช็คบิลที่ยังไม่จ่าย
         if user_text.lower() == "bill":
             unpaid_bills = []
             for ws in sh.worksheets():
@@ -162,23 +156,19 @@ def handle_text_message(event):
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[8] == "ยังไม่จ่าย":
                             cat = row[5] if len(row) > 5 else "ไม่ระบุ"
                             unpaid_bills.append((cat, row[3]))
-            
             if not unpaid_bills:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🎉 ไม่มีบิลค้างชำระครับ!"))
                 return
-                
             reply_msg = "🧾 บิลที่ยังไม่จ่าย (รวมค้างชำระ):\n"
             items = []
             for cat, amt in unpaid_bills:
                 reply_msg += f"• {cat} : {amt} บาท\n"
                 if len(items) < 13:
                     items.append(QuickReplyButton(action=MessageAction(label=f"จ่าย {cat}", text=f"อัปเดตบิล {cat}")))
-                    
             reply_msg += "\n👇 กดปุ่มด้านล่างเพื่อเลือกจ่ายบิลได้เลยครับ"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg, quick_reply=QuickReply(items=items)))
             return
 
-        # 🟢 2. เลือกบิลเพื่อไปเลือกบัญชีต่อ
         if user_text.startswith("อัปเดตบิล "):
             target_cat = user_text.replace("อัปเดตบิล ", "").strip()
             quick_reply = QuickReply(items=[
@@ -187,18 +177,13 @@ def handle_text_message(event):
                 QuickReplyButton(action=MessageAction(label="TrueMoney", text=f"จ่ายผ่าน|{target_cat}|TrueMoney")),
                 QuickReplyButton(action=MessageAction(label="เงินสด", text=f"จ่ายผ่าน|{target_cat}|เงินสด"))
             ])
-            line_bot_api.reply_message(
-                event.reply_token, 
-                TextSendMessage(text=f"เลือกบัญชีที่ใช้จ่ายบิล '{target_cat}' ครับ 👇", quick_reply=quick_reply)
-            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"เลือกบัญชีที่ใช้จ่ายบิล '{target_cat}' ครับ 👇", quick_reply=quick_reply))
             return
 
-        # 🟢 3. บันทึกสถานะ "จ่ายแล้ว"
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
             chosen_account = parts[2]
-            
             found = False
             for ws in reversed(sh.worksheets()):
                 rows = ws.get_all_values()
@@ -212,29 +197,20 @@ def handle_text_message(event):
                             ws.update_cell(i+1, 10, chosen_account)
                             found = True
                             break
-                if found:
-                    break
-                        
+                if found: break
             if found:
-                line_bot_api.reply_message(
-                    event.reply_token, 
-                    TextSendMessage(text=f"✅ อัปเดตบิล '{target_cat}' เป็น 'จ่ายแล้ว' (จ่ายผ่านบัญชี {chosen_account}) เรียบร้อย หักยอดเงินสำเร็จ!")
-                )
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ อัปเดตบิล '{target_cat}' เป็น 'จ่ายแล้ว' (จ่ายผ่านบัญชี {chosen_account}) เรียบร้อย หักยอดเงินสำเร็จ!"))
             else:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ ไม่พบบิล '{target_cat}' ที่ยังไม่จ่ายครับ"))
             return
 
-        # 🟢 4. สรุปยอด
         if user_text == "สรุป":
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="📊 สรุปเดือนนี้", text="สรุปเดือนนี้")),
                 QuickReplyButton(action=MessageAction(label="📅 สรุปเดือนที่แล้ว", text="สรุปเดือนที่แล้ว")),
                 QuickReplyButton(action=MessageAction(label="📈 สรุปทั้งหมด", text="สรุปทั้งหมด"))
             ])
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="ต้องการดูสรุปบัญชีของช่วงเวลาไหนครับ? 👇", quick_reply=quick_reply)
-            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="ต้องการดูสรุปบัญชีของช่วงเวลาไหนครับ? 👇", quick_reply=quick_reply))
             return
 
         if user_text in ["สรุปเดือนนี้", "สรุปเดือนที่แล้ว", "สรุปทั้งหมด"]:
@@ -253,14 +229,12 @@ def handle_text_message(event):
             total_monthly_paid, total_monthly_unpaid = 0.0, 0.0
             income_accounts_monthly, expense_accounts_monthly = {}, {}
             monthly_paid_cats, monthly_unpaid_cats = {}, {}
-            
             income_accounts_all, expense_accounts_all, monthly_accounts_all = {}, {}, {}
             transfer_in_all, transfer_out_all = {}, {}
             
             for ws in sh.worksheets():
                 rows = ws.get_all_values()
                 is_target_month = (ws.title in target_sheets_names)
-                
                 for row in rows[1:]:
                     if len(row) >= 4:
                         try:
@@ -279,11 +253,9 @@ def handle_text_message(event):
                                     paid_account = row[9] if len(row) > 9 and row[9].strip() != "" and row[9] != "-" else account
                                     if paid_account != "-":
                                         monthly_accounts_all[paid_account] = monthly_accounts_all.get(paid_account, 0) + amt
-                                    
                                 if status == "ยังไม่จ่าย":
                                     total_monthly_unpaid += amt
                                     monthly_unpaid_cats[cat] = monthly_unpaid_cats.get(cat, 0) + amt
-
                             elif record_type == "ย้ายเงิน":
                                 src_acc = account
                                 dst_acc = cat
@@ -302,49 +274,35 @@ def handle_text_message(event):
                                     if status == "จ่ายแล้ว":
                                         total_monthly_paid += amt
                                         monthly_paid_cats[cat] = monthly_paid_cats.get(cat, 0) + amt
-
                         except ValueError:
                             pass
             
             all_accounts = set(income_accounts_all.keys()) | set(expense_accounts_all.keys()) | set(monthly_accounts_all.keys()) | set(transfer_in_all.keys()) | set(transfer_out_all.keys())
             balance_accounts = {}
             total_balance = 0.0
-            
             for acc in all_accounts:
                 if acc == "-": continue
-                bal = (income_accounts_all.get(acc, 0.0) 
-                       - expense_accounts_all.get(acc, 0.0) 
-                       - monthly_accounts_all.get(acc, 0.0) 
-                       + transfer_in_all.get(acc, 0.0) 
-                       - transfer_out_all.get(acc, 0.0))
+                bal = (income_accounts_all.get(acc, 0.0) - expense_accounts_all.get(acc, 0.0) - monthly_accounts_all.get(acc, 0.0) + transfer_in_all.get(acc, 0.0) - transfer_out_all.get(acc, 0.0))
                 balance_accounts[acc] = bal
                 total_balance += bal
             
-            reply_msg = f"📊 สรุปบัญชี ({month_label}):\n\n"
-            reply_msg += f"🟢 รายรับรวม: {total_income:,.2f} บาท\n"
+            reply_msg = f"📊 สรุปบัญชี ({month_label}):\n\n🟢 รายรับรวม: {total_income:,.2f} บาท\n"
             for acc, amt in income_accounts_monthly.items():
                 if acc != "-": reply_msg += f"   • {acc}: {amt:,.2f}\n"
-                
             reply_msg += f"\n🔴 รายจ่ายทั่วไป: {total_expense:,.2f} บาท\n"
             for acc, amt in expense_accounts_monthly.items():
                 if acc != "-": reply_msg += f"   • {acc}: {amt:,.2f}\n"
-                
             reply_msg += f"\n🟡 บิลต้องชำระ (จ่ายแล้ว): {total_monthly_paid:,.2f} บาท\n"
             for c, amt in monthly_paid_cats.items(): reply_msg += f"   • {c}: {amt:,.2f}\n"
-                
             if total_monthly_unpaid > 0:
                 reply_msg += f"\n⭕ บิลค้างชำระสะสม (ยังไม่จ่าย): {total_monthly_unpaid:,.2f} บาท\n"
                 for c, amt in monthly_unpaid_cats.items(): reply_msg += f"   • {c}: {amt:,.2f}\n"
-                
             reply_msg += f"\n💰 คงเหลือแต่ละบัญชี (สะสม):\n"
             for acc, amt in balance_accounts.items(): reply_msg += f"   • {acc}: {amt:,.2f}\n"
-                
             reply_msg += f"\n💵 ยอดคงเหลือรวมสุทธิ: {total_balance:,.2f} บาท"
-            
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
             return
 
-        # 🔵 5. พิมพ์ตัวเลขเข้ามา (เริ่มต้นจดบัญชีเอง)
         is_number = False
         try:
             float(user_text.replace(',', ''))
@@ -355,29 +313,21 @@ def handle_text_message(event):
         if is_number:
             amount = user_text.replace(',', '')
             worksheet.append_row([date_str, time_str, "รอระบุประเภท", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", "-", "-", "รอระบุสถานะบิล", "-"])
-            
             quick_reply = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="รายรับ", text="รายรับ")),
                 QuickReplyButton(action=MessageAction(label="รายจ่ายทั่วไป", text="รายจ่าย")),
                 QuickReplyButton(action=MessageAction(label="บิลรายเดือน", text="รายจ่ายต้องชำระต่อเดือน")),
                 QuickReplyButton(action=MessageAction(label="🔄 ย้ายเงิน", text="ย้ายเงิน"))
             ])
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"ยอดเงิน {user_text} บาท เป็นประเภทไหนครับ? 👇", quick_reply=quick_reply)
-            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ยอดเงิน {user_text} บาท เป็นประเภทไหนครับ? 👇", quick_reply=quick_reply))
             return
 
-        # 🟡 6. จัดการปุ่มกดตาม State
         rows = worksheet.get_all_values()
         last_row_index = len(rows)
-        
         if last_row_index > 1:
             last_row = rows[-1]
-            
             if len(last_row) > 2 and last_row[2] == "รอระบุประเภท":
                 worksheet.update_cell(last_row_index, 3, user_text)
-                
                 if user_text == "รายจ่ายต้องชำระต่อเดือน":
                     worksheet.update_cell(last_row_index, 5, "-") 
                     items = [
@@ -413,7 +363,6 @@ def handle_text_message(event):
             if len(last_row) > 4 and last_row[4] == "รอระบุบัญชี":
                 worksheet.update_cell(last_row_index, 5, user_text)
                 record_type = last_row[2]
-                
                 if record_type == "ย้ายเงิน":
                     worksheet.update_cell(last_row_index, 6, "รอระบุบัญชีปลายทาง")
                     quick_reply = QuickReply(items=[
@@ -446,18 +395,15 @@ def handle_text_message(event):
                 worksheet.update_cell(last_row_index, 6, user_text)
                 worksheet.update_cell(last_row_index, 9, "-")
                 worksheet.update_cell(last_row_index, 10, "-")
-                
                 try:
                     transfer_amount = float(str(last_row[3]).replace(',', ''))
                 except ValueError:
                     transfer_amount = 0.0
-                    
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกย้ายเงินจาก {last_row[4]} ➡️ {user_text} จำนวน {transfer_amount:,.2f} บาท เรียบร้อย!"))
                 return
 
             if len(last_row) > 5 and last_row[5] == "รอระบุหมวดหมู่":
                 worksheet.update_cell(last_row_index, 6, user_text)
-                
                 monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"]
                 is_monthly = False
                 if user_text in monthly_bill_cats and last_row[2] == "รายจ่าย":
@@ -507,19 +453,8 @@ def handle_text_message(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ บันทึกบิลเรียบร้อย! (หักเงินจากบัญชี {account_name} แล้ว)"))
                 return
 
-        cheeky_replies = [
-            "แหมมม ทักมาซะตกใจ นึกว่าจะโอนเงินให้! 💸 ถ้าจะจดบัญชี พิมพ์ตัวเลขมาได้เลยจ้า",
-            "จ้าาา รับทราบจ้า! แต่ถ้าจะให้จดบัญชี รบกวนพิมพ์เป็นตัวเลขนะจ๊ะตัวเอง 😆",
-            "ทักมาทำไม เหงาอ่อ? 😝 บอทคุยไม่เก่งนะ บอทเก่งแต่เรื่องทวงบิล! (พิมพ์ bill เพื่อดูบิลค้างได้นะ)",
-            "จร้าจ่าจ้ะ! 🤣 ถ้าไม่ได้มาจดบัญชี บอทขออนุญาตไปนอนพักสายตาก่อนนะ...",
-            "พิมพ์มาแบบนี้ บอทงงเด้อ! 🤪 ถ้าจะจดรายจ่าย พิมพ์ตัวเลขมาโลดดด",
-            "ฮั่นแน่! แอบอู้ไม่ยอมทำงานมาแชทเล่นกับบอทใช่มั้ย! 🤨 รีบไปหาเงินมาให้บอทจดเดี๋ยวนี้!"
-        ]
-        
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=random.choice(cheeky_replies))
-        )
+        cheeky_replies = ["แหมมม ทักมาซะตกใจ นึกว่าจะโอนเงินให้! 💸 ถ้าจะจดบัญชี พิมพ์ตัวเลขมาได้เลยจ้า", "จ้าาา รับทราบจ้า! แต่ถ้าจะให้จดบัญชี รบกวนพิมพ์เป็นตัวเลขนะจ๊ะตัวเอง 😆"]
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=random.choice(cheeky_replies)))
                 
     except Exception as e:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}"))
@@ -549,11 +484,9 @@ def handle_image_message(event):
                 amount = data.get('amount')
                 sender = data.get('sender', {}).get('displayName', '-')
                 receiver = data.get('receiver', {}).get('displayName', '-')
-                
                 now = datetime.now(TH_TZ)
                 date_str = now.strftime("%d/%m/%Y")
                 time_str = now.strftime("%H:%M:%S")
-                
                 worksheet = get_current_worksheet()
                 worksheet.append_row([date_str, time_str, "รายจ่าย", amount, "รอระบุบัญชี", "รอระบุหมวดหมู่", sender, receiver, "-", "-"])
                 
