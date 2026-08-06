@@ -13,37 +13,30 @@ from linebot.models import (
 
 app = Flask(__name__)
 
-# 🌟 ตัวแปรเก็บสถานะ เพื่อไม่ให้มันสร้างชีตซ้ำทุกๆ 5 นาที
 last_checked_month = None
 
-# 🌟 อัปเกรดหน้า Home ให้แอบสร้างชีตล่วงหน้า
 @app.route("/")
 def home():
     global last_checked_month
     now = datetime.now(TH_TZ)
     current_m = now.strftime("%m/%y")
 
-    # ถ้าถึงวันที่ 25 ของเดือนแล้ว และเดือนนี้ยังไม่ได้เตรียมชีตล่วงหน้า
-    if now.day >= 5 and last_checked_month != current_m:
+    # แอบเตรียมชีตของเดือนหน้าล่วงหน้า ถ้าถึงวันที่ 25 แล้ว
+    if now.day >= 25 and last_checked_month != current_m:
         try:
             sh = gc.open('MoneyBase')
-            # คำนวณชื่อแท็บของเดือนหน้า (เช่น ถ้าตอนนี้ 08/26 จะได้ 09/26)
             next_month_date = now.replace(day=28) + timedelta(days=5)
             next_month_str = next_month_date.strftime("%m/%y")
             
             try:
-                # ลองหาว่ามีแท็บเดือนหน้ารออยู่หรือยัง
                 sh.worksheet(next_month_str)
             except gspread.exceptions.WorksheetNotFound:
-                # ถ้ายังไม่มี ให้ก๊อปปี้แท็บของเดือนปัจจุบันไปเตรียมรอไว้เลย
                 try:
                     curr_ws = sh.worksheet(current_m)
                     new_ws = curr_ws.duplicate(new_sheet_name=next_month_str)
-                    new_ws.batch_clear(["A2:J5000"]) # ลบตัวเลขเก่าทิ้ง
+                    new_ws.batch_clear(["A2:J5000"]) 
                 except Exception:
-                    pass # ถ้าเดือนปัจจุบันก็ยังไม่มี ให้ข้ามไปก่อน
-                    
-            # บันทึกไว้ว่าเดือนนี้ได้ทำการเตรียมชีตล่วงหน้าเรียบร้อยแล้ว
+                    pass 
             last_checked_month = current_m
         except Exception as e:
             print("Error preparing next month:", e)
@@ -75,8 +68,8 @@ def api_add():
     elif record_type == 'transfer': 
         type_th = "ย้ายเงิน"
         status_val = "-"
-        account = source_acc  # บัญชีต้นทาง
-        category = dest_acc   # บัญชีปลายทาง
+        account = source_acc  
+        category = dest_acc   
     elif record_type == 'bill': 
         type_th = "รายจ่ายต้องชำระต่อเดือน"
         if status_val == "ยังไม่จ่าย":
@@ -92,7 +85,24 @@ def api_add():
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
-        # บันทึกลงชีต 
+        # 🌟 ลอจิกใหม่: ถ้ากด "จ่ายแล้ว" จากเว็บ ให้ไปเช็คว่ามีบิลค้างในอดีตไหม ถ้ามีให้ขีดฆ่าทิ้ง (ป้องกันซ้ำซ้อน)
+        if type_th == "รายจ่ายต้องชำระต่อเดือน" and status_val == "จ่ายแล้ว":
+            sh = gc.open('MoneyBase')
+            for ws in reversed(sh.worksheets()):
+                rows = ws.get_all_values()
+                cleared = False
+                for i in range(len(rows)-1, 0, -1):
+                    row = rows[i]
+                    if len(row) >= 9:
+                        if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == category and row[8] == "ยังไม่จ่าย":
+                            # ปิดบัญชีบิลเก่า
+                            ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
+                            ws.update_cell(i+1, 9, "เคลียร์บิลแล้ว")
+                            cleared = True
+                            break 
+                if cleared:
+                    break
+
         worksheet.append_row([date_str, time_str, type_th, amount, account, category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
@@ -163,7 +173,6 @@ def get_current_worksheet():
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        # ระบบเก่า: ถ้าหาของเดือนนี้ไม่เจอ จะก๊อปปี้จากเดือนที่แล้ว
         first_day_this_month = now.replace(day=1)
         last_month_date = first_day_this_month - timedelta(days=1)
         last_month_str = last_month_date.strftime("%m/%y")
@@ -237,24 +246,39 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"เลือกบัญชีที่ใช้จ่ายบิล '{target_cat}' ครับ 👇", quick_reply=quick_reply))
             return
 
+        # 🌟 ลอจิกการเคลียร์บิลข้ามเดือน ผ่านคำสั่ง LINE
         if user_text.startswith("จ่ายผ่าน|"):
             parts = user_text.split("|")
             target_cat = parts[1]
             chosen_account = parts[2]
             found = False
+            
             for ws in reversed(sh.worksheets()):
                 rows = ws.get_all_values()
                 for i in range(len(rows)-1, 0, -1):
                     row = rows[i]
                     if len(row) >= 9:
                         if row[2] == "รายจ่ายต้องชำระต่อเดือน" and row[5] == target_cat and row[8] == "ยังไม่จ่าย":
-                            ws.update_cell(i+1, 9, "จ่ายแล้ว")
-                            while len(ws.row_values(i+1)) < 10:
-                                ws.update_cell(i+1, 10, "-")
-                            ws.update_cell(i+1, 10, chosen_account)
+                            old_amt = row[3]
+                            if ws.title == current_month_str:
+                                # ถ้าบิลค้างนั้นอยู่ใน "เดือนปัจจุบัน" (อัปเดตบรรทัดเดิมได้เลย)
+                                ws.update_cell(i+1, 5, chosen_account) # อัปเดตบัญชีที่ตัดเงิน
+                                ws.update_cell(i+1, 9, "จ่ายแล้ว")
+                                while len(ws.row_values(i+1)) < 10:
+                                    ws.update_cell(i+1, 10, "-")
+                                ws.update_cell(i+1, 10, chosen_account)
+                            else:
+                                # 🌟 ถ้าเป็นการจ่ายบิล "ข้ามเดือน"
+                                # 1. เปลี่ยนสถานะบิลในเดือนเก่าไม่ให้มาคำนวณซ้ำ
+                                ws.update_cell(i+1, 3, "บิลค้างชำระ (เคลียร์แล้ว)")
+                                ws.update_cell(i+1, 9, "ย้ายไปจ่ายเดือนปัจจุบัน")
+                                # 2. นำยอดมาบันทึกในแท็บเดือนปัจจุบันแทน เพื่อให้บัญชีเดือนนี้ตรง
+                                worksheet.append_row([date_str, time_str, "รายจ่ายต้องชำระต่อเดือน", old_amt, chosen_account, target_cat, "-", "จ่ายบิลค้างชำระจากเดือนเก่า", "จ่ายแล้ว", "-"])
+                            
                             found = True
                             break
                 if found: break
+                
             if found:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ อัปเดตบิล '{target_cat}' เป็น 'จ่ายแล้ว' (จ่ายผ่านบัญชี {chosen_account}) เรียบร้อย หักยอดเงินสำเร็จ!"))
             else:
