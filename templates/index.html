@@ -106,7 +106,7 @@
 
 
     <!-- ==========================================
-         2. หน้าบิลรายเดือน (Bills Page) - แทนที่พี่มนุษย์
+         2. หน้าบิลรายเดือน (Bills Page)
          ========================================== -->
     <div id="bills-page" class="page">
         <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
@@ -118,6 +118,12 @@
                 <div class="insight-title">ยอดรวมบิลเดือนนี้</div>
                 <div style="font-size: 36px; font-weight: 700;" id="bills-total">... ฿</div>
             </div>
+            
+            <!-- 🌟 ปุ่มลัดสำหรับจดบิลรายเดือนโดยเฉพาะ -->
+            <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithBill()">
+                + จดบิลรายเดือนเพิ่ม
+            </button>
+
             <h3 style="font-size:16px; margin-bottom:10px; color:#94a3b8;">รายการที่ชำระไปแล้วในเดือนนี้:</h3>
             <div id="bills-list">
                 <!-- ข้อมูลบิลจะโชว์ตรงนี้ -->
@@ -177,7 +183,7 @@
         </div>
     </div>
 
-    <!-- ปุ่มลอย "จดเพิ่ม" (แสดงเฉพาะหน้าแรก) -->
+    <!-- ปุ่มลอย "จดเพิ่ม" -->
     <div class="fab-container" id="fab-button">
         <button class="fab-btn" onclick="openForm()">
             <svg style="width: 20px; height: 20px; stroke: white; fill: none; stroke-width: 2;" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -217,23 +223,23 @@
             document.getElementById('fab-button').style.display = 'flex';
             document.getElementById('nav-home').classList.add('active');
             document.getElementById('nav-bills').classList.remove('active');
-            fetchMonthData(); // รีเฟรชข้อมูลทุกครั้งที่กลับหน้าแรก
+            fetchMonthData(); 
         }
 
         function openBills() {
             hideAllPages();
             document.getElementById('bills-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'flex';
-            document.getElementById('fab-button').style.display = 'none'; // ซ่อนปุ่มจดเพิ่ม
+            document.getElementById('fab-button').style.display = 'flex'; // 🌟 โชว์ปุ่มลอยในหน้าบิลด้วย
             document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-bills').classList.add('active');
-            renderBills(); // วาดข้อมูลบิล
+            renderBills(); 
         }
 
         function openSummary() {
             hideAllPages();
             document.getElementById('summary-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'none'; // ซ่อนแถบด้านล่าง
+            document.getElementById('main-nav').style.display = 'none'; 
             document.getElementById('fab-button').style.display = 'none';
             renderSummary();
         }
@@ -243,6 +249,20 @@
             document.getElementById('form-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'none';
             document.getElementById('fab-button').style.display = 'none';
+            
+            // รีเซ็ตแท็บฟอร์มให้กลับไปหน้า 'รายจ่าย' เสมอเมื่อเปิดใหม่แบบปกติ
+            switchTab('expense', document.querySelectorAll('.tab')[0]);
+        }
+
+        // 🌟 ฟังก์ชันเปิดฟอร์มแบบ "ล็อกเป้า" ให้เลือกบิลรายเดือนอัตโนมัติ
+        function openFormWithBill() {
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.display = 'none';
+            document.getElementById('fab-button').style.display = 'none';
+            
+            switchTab('expense', document.querySelectorAll('.tab')[0]); // เปลี่ยนไปแท็บรายจ่าย
+            document.getElementById('category').value = "รายจ่ายต้องชำระต่อเดือน"; // เลือกหมวดหมู่ให้เลย
         }
 
         // ---------------- ระบบข้อมูล (Data & Date) ----------------
@@ -278,13 +298,19 @@
                 
                 currentRecords = data.records || []; 
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
-                renderRecords(currentRecords);
+                
+                // ถ้ายืนอยู่หน้าแรกให้วาดหน้าแรก, ถ้ายืนอยู่หน้าบิลให้วาดบิลใหม่
+                if (document.getElementById('home-page').classList.contains('active')) {
+                    renderRecords(currentRecords);
+                } else if (document.getElementById('bills-page').classList.contains('active')) {
+                    renderBills();
+                }
             } catch (error) {
                 document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
             }
         }
 
-        // วาดหน้าแรก (หน้าแรก)
+        // วาดหน้าแรก
         function renderRecords(records) {
             const container = document.getElementById('records-container');
             if (!records || records.length === 0) {
@@ -339,12 +365,11 @@
             container.innerHTML = html;
         }
 
-        // วาดหน้าบิลรายเดือน (Bills Page)
+        // วาดหน้าบิลรายเดือน
         function renderBills() {
             let totalBills = 0;
             let billsHtml = '';
             
-            // กรองเอาเฉพาะข้อมูลที่เป็น "รายจ่ายต้องชำระต่อเดือน"
             const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน');
 
             bills.forEach(b => {
@@ -370,7 +395,7 @@
             document.getElementById('bills-list').innerHTML = billsHtml;
         }
 
-        // วาดหน้าสรุป (Summary Page)
+        // วาดหน้าสรุป
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -433,7 +458,7 @@
 
         updateDateDisplay();
 
-        // ---------------- ระบบ Form (จดเพิ่ม) ----------------
+        // ---------------- ระบบ Form สลับแท็บ ----------------
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -509,7 +534,7 @@
                     document.getElementById('amount').value = '';
                     document.getElementById('category').value = '';
                     document.getElementById('note').value = '';
-                    openHome(); // ปิดฟอร์มกลับไปหน้าแรก (จะสั่งโหลดข้อมูลใหม่ให้ด้วย)
+                    openHome(); 
                 } else {
                     alert('❌ เกิดข้อผิดพลาด: ' + result.message);
                 }
