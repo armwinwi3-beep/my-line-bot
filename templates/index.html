@@ -77,7 +77,7 @@
         <div class="yellow-card">
             <div class="month-selector">
                 <span onclick="changeMonth(-1)">&lt;</span>
-                <span id="monthYearDisplay">📅 ส.ค. 69</span>
+                <span id="monthYearDisplay">📅 ...</span>
                 <span onclick="changeMonth(1)">&gt;</span>
             </div>
             <div class="expense-summary">
@@ -125,7 +125,6 @@
     <div id="form-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">✕</div>
-            <!-- 🌟 เพิ่มแท็บที่ 4: บิล -->
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('expense', this)">รายจ่าย</div>
                 <div class="tab" onclick="switchTab('income', this)">รายรับ</div>
@@ -140,11 +139,47 @@
                 <input type="number" id="amount" class="amount-input" placeholder="0">
                 <div class="currency">฿</div>
             </div>
+            
+            <!-- 🌟 กล่องบัญชีสำหรับ รายจ่าย, รายรับ, บิล -->
+            <div class="form-box" id="accountBox">
+                <select id="account">
+                    <option value="" disabled selected>เลือกบัญชี</option>
+                    <option value="กสิกร">🟢 กสิกร</option>
+                    <option value="กรุงไทย">🔵 กรุงไทย</option>
+                    <option value="TrueMoney">🟠 TrueMoney</option>
+                    <option value="เงินสด">💵 เงินสด</option>
+                </select>
+            </div>
+
+            <!-- 🌟 กล่องโอนย้ายบัญชี (จะแสดงเฉพาะตอนคลิก ย้ายเงิน) -->
+            <div id="transferAccountBox" style="display: none; flex-direction: column; gap: 15px;">
+                <div class="form-box">
+                    <select id="sourceAccount">
+                        <option value="" disabled selected>โอนจากบัญชี (ต้นทาง)</option>
+                        <option value="กสิกร">🟢 กสิกร</option>
+                        <option value="กรุงไทย">🔵 กรุงไทย</option>
+                        <option value="TrueMoney">🟠 TrueMoney</option>
+                        <option value="เงินสด">💵 เงินสด</option>
+                    </select>
+                </div>
+                <div style="text-align: center; color: #60a5fa;">⬇️ ย้ายเข้าบัญชี ⬇️</div>
+                <div class="form-box">
+                    <select id="destinationAccount">
+                        <option value="" disabled selected>ย้ายเข้าบัญชี (ปลายทาง)</option>
+                        <option value="กสิกร">🟢 กสิกร</option>
+                        <option value="กรุงไทย">🔵 กรุงไทย</option>
+                        <option value="TrueMoney">🟠 TrueMoney</option>
+                        <option value="เงินสด">💵 เงินสด</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- กล่องหมวดหมู่ -->
             <div class="form-box" id="categoryBox">
                 <select id="category"></select>
             </div>
             
-            <!-- 🌟 กล่องเลือกสถานะบิล (จะโชว์เฉพาะตอนเลือกแท็บ บิล) -->
+            <!-- กล่องสถานะ (เฉพาะบิล) -->
             <div class="form-box" id="statusBox" style="display: none;">
                 <select id="billStatus" style="color: #facc15; font-weight: bold;">
                     <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
@@ -155,9 +190,7 @@
             <div class="form-box">
                 <input type="text" id="note" placeholder="เพิ่มโน้ต">
             </div>
-            <div class="transfer-note" id="transferNote" style="display: none; color: #94a3b8; font-size: 12px; text-align: center; margin-top: 10px;">
-                รายการย้ายเงิน ไม่นับเป็นรายจ่าย/รายรับ<br>ใช้จดการย้ายเงินข้ามบัญชี เติมเงินวอลเล็ท จ่ายหนี้
-            </div>
+
             <button class="save-btn" onclick="saveRecord()">บันทึก</button>
         </div>
     </div>
@@ -231,7 +264,7 @@
             document.getElementById('form-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'none';
             document.getElementById('fab-button').style.display = 'none';
-            switchTab('bill', document.querySelectorAll('.tab')[3]); // 🌟 ลัดเข้าแท็บบิลเลย
+            switchTab('bill', document.querySelectorAll('.tab')[3]); 
         }
 
         function updateDateDisplay() {
@@ -276,7 +309,6 @@
             }
         }
 
-        // หน้าแรก
         function renderRecords(records) {
             const container = document.getElementById('records-container');
             const validRecords = records.filter(r => r.status !== 'ยังไม่จ่าย');
@@ -326,7 +358,6 @@
             container.innerHTML = html;
         }
 
-        // หน้าบิล: 🌟 แยกค้างชำระ กับ จ่ายแล้วให้เห็นชัดๆ
         function renderBills() {
             let totalPaid = 0;
             let totalUnpaid = 0;
@@ -368,21 +399,15 @@
             document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
             
             let finalHtml = '';
-            if (unpaidHtml !== '') {
-                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
-            }
+            if (unpaidHtml !== '') finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
             
             finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
-            if (paidHtml === '') {
-                finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
-            } else {
-                finalHtml += paidHtml;
-            }
+            if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
+            else finalHtml += paidHtml;
 
             document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
-        // หน้าสรุป
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -439,7 +464,7 @@
 
         updateDateDisplay();
 
-        // 🌟 แท็บใหม่ 'บิล' (bill)
+        // 🌟 เปลี่ยนการสลับแท็บให้รองรับการซ่อน/แสดงกล่องบัญชี
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -448,36 +473,38 @@
 
             const icon = document.getElementById('typeIcon');
             const catBox = document.getElementById('categoryBox');
-            const tNote = document.getElementById('transferNote');
+            const accBox = document.getElementById('accountBox'); // กล่องบัญชีเดี่ยว
+            const transBox = document.getElementById('transferAccountBox'); // กล่องบัญชีย้ายเงินคู่
             const sBox = document.getElementById('statusBox');
 
             icon.className = 'amount-icon'; 
             sBox.style.display = 'none';
 
-            if (type === 'expense') {
-                icon.innerText = '↑';
-                icon.classList.add('color-expense');
-                catBox.style.display = 'flex';
-                tNote.style.display = 'none';
-                updateCategoryOptions('expense');
-            } else if (type === 'income') {
-                icon.innerText = '↓';
-                icon.classList.add('color-income');
-                catBox.style.display = 'flex';
-                tNote.style.display = 'none';
-                updateCategoryOptions('income');
-            } else if (type === 'transfer') {
+            if (type === 'transfer') {
                 icon.innerText = '⇄';
                 icon.classList.add('color-transfer');
                 catBox.style.display = 'none';
-                tNote.style.display = 'block';
-            } else if (type === 'bill') {
-                icon.innerText = '🧾';
-                icon.classList.add('color-bill');
+                accBox.style.display = 'none';
+                transBox.style.display = 'flex';
+            } else {
                 catBox.style.display = 'flex';
-                tNote.style.display = 'none';
-                sBox.style.display = 'flex'; // 🌟 แสดงตัวเลือกสถานะ จ่ายแล้ว/ยังไม่จ่าย
-                updateCategoryOptions('bill');
+                accBox.style.display = 'flex';
+                transBox.style.display = 'none';
+                
+                if (type === 'expense') {
+                    icon.innerText = '↑';
+                    icon.classList.add('color-expense');
+                    updateCategoryOptions('expense');
+                } else if (type === 'income') {
+                    icon.innerText = '↓';
+                    icon.classList.add('color-income');
+                    updateCategoryOptions('income');
+                } else if (type === 'bill') {
+                    icon.innerText = '🧾';
+                    icon.classList.add('color-bill');
+                    sBox.style.display = 'flex'; 
+                    updateCategoryOptions('bill');
+                }
             }
         }
 
@@ -488,13 +515,15 @@
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
                     <option value="อาหาร">🍔 อาหาร</option>
                     <option value="เดินทาง">🚗 เดินทาง</option>
+                    <option value="BTS">🚆 BTS</option>
                     <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
                     <option value="ทั่วไป">ทั่วไป</option>`;
             } else if (type === 'income') {
                 select.innerHTML = `
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
                     <option value="เงินเดือน">💰 เงินเดือน</option>
-                    <option value="จากพ่อแม่">พ่อแม่</option>
+                    <option value="จากพ่อ">👨 จากพ่อ</option>
+                    <option value="จากแม่">👩 จากแม่</option>
                     <option value="อื่นๆ">อื่นๆ</option>`;
             } else if (type === 'bill') {
                 select.innerHTML = `
@@ -511,17 +540,37 @@
 
         async function saveRecord() {
             const amount = document.getElementById('amount').value;
-            const category = document.getElementById('category').value;
             const note = document.getElementById('note').value;
-            let statusVal = '-';
             
-            // 🌟 ถ้าเป็นแท็บบิล ให้ดึงค่าสถานะส่งไปด้วย
-            if (currentType === 'bill') {
-                statusVal = document.getElementById('billStatus').value;
-            }
+            let payload = { type: currentType, amount: amount, note: note };
 
             if(!amount) { alert("⚠️ กรุณาใส่จำนวนเงินด้วยครับ!"); return; }
-            if(currentType !== 'transfer' && !category) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
+
+            // เช็คและเก็บข้อมูลให้ถูกต้องตามประเภท
+            if (currentType === 'transfer') {
+                const srcAcc = document.getElementById('sourceAccount').value;
+                const destAcc = document.getElementById('destinationAccount').value;
+                if(!srcAcc || !destAcc) { alert("⚠️ กรุณาเลือกบัญชีต้นทางและปลายทางให้ครบครับ!"); return; }
+                if(srcAcc === destAcc) { alert("⚠️ บัญชีต้นทางและปลายทางต้องไม่เหมือนกันครับ!"); return; }
+                
+                payload.sourceAccount = srcAcc;
+                payload.destinationAccount = destAcc;
+            } else {
+                const cat = document.getElementById('category').value;
+                const acc = document.getElementById('account').value;
+                
+                if(!cat) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
+                
+                // ถ้ายืนยันว่าจ่ายแล้ว หรือเป็นรายรับรายจ่ายปกติ ต้องเลือกบัญชี
+                const statusVal = currentType === 'bill' ? document.getElementById('billStatus').value : '-';
+                if ((currentType !== 'bill' || statusVal === 'จ่ายแล้ว') && !acc) {
+                    alert("⚠️ กรุณาเลือกบัญชีด้วยครับ!"); return; 
+                }
+
+                payload.category = cat;
+                payload.account = acc || '-';
+                payload.status = statusVal;
+            }
 
             const btn = document.querySelector('.save-btn');
             const originalText = btn.innerText;
@@ -532,19 +581,14 @@
                 const response = await fetch('/api/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        type: currentType, 
-                        amount: amount, 
-                        category: category, 
-                        note: note,
-                        status: statusVal // 🌟 แนบไปให้ Python
-                    })
+                    body: JSON.stringify(payload)
                 });
                 const result = await response.json();
                 
                 if(result.status === 'success') {
                     document.getElementById('amount').value = '';
                     document.getElementById('category').value = '';
+                    document.getElementById('account').value = '';
                     document.getElementById('note').value = '';
                     openHome(); 
                 } else {
