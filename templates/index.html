@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกรายการ - MoneyBase</title>
+    <!-- โหลดฟอนต์ Noto Sans Thai ให้ดูทันสมัย -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans Thai', sans-serif;
+        }
+        
+        body {
+            background-color: #0B192C;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* แถบด้านบน (สีเหลือง) */
+        
+        .top-bar {
+            background-color: #FACC15;
+            padding: 20px 15px 0 15px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            border-radius: 0 0 15px 15px;
+        }
+        
+        .close-btn {
+            font-size: 24px;
+            color: #1e293b;
+            font-weight: bold;
+            cursor: pointer;
+            padding-bottom: 10px;
+        }
+        /* แท็บเมนู */
+        
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+            margin-bottom: -1px;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            color: #1e293b;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: 0.3s;
+        }
+        
+        .tab.active {
+            background-color: #0B192C;
+            color: white;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .tab svg {
+            width: 20px;
+            height: 20px;
+            margin-bottom: 5px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        /* พื้นที่เนื้อหา */
+        
+        .content {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .date-display {
+            font-size: 14px;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+        }
+        /* กล่องใส่จำนวนเงิน */
+        
+        .amount-box {
+            background-color: #11223A;
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .amount-icon {
+            font-size: 30px;
+            font-weight: bold;
+        }
+        /* สีประจำแท็บ */
+        
+        .color-expense {
+            color: #ef4444;
+        }
+        /* แดง */
+        
+        .color-income {
+            color: #22c55e;
+        }
+        /* เขียว */
+        
+        .color-transfer {
+            color: #eab308;
+        }
+        /* เหลือง */
+        
+        .amount-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 40px;
+            width: 100%;
+            font-weight: 300;
+        }
+        
+        .amount-input::placeholder {
+            color: #475569;
+        }
+        
+        .currency {
+            color: #475569;
+            font-size: 30px;
+            font-weight: 300;
+        }
+        /* กล่องฟอร์มอื่นๆ */
+        
+        .form-box {
+            background-color: #11223A;
+            border-radius: 15px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+        }
+        
+        .form-box svg {
+            width: 24px;
+            height: 24px;
+            stroke: #60a5fa;
+            fill: none;
+            stroke-width: 2;
+        }
+        
+        .form-box input,
+        .form-box select {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        .form-box input::placeholder {
+            color: #60a5fa;
+        }
+        
+        .form-box select {
+            color: #60a5fa;
+            appearance: none;
+        }
+        /* ปุ่มบันทึก */
+        
+        .save-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: auto;
+            margin-bottom: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+        /* ข้อความอธิบายย้ายเงิน */
+        
+        .transfer-note {
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+            line-height: 1.5;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- แถบด้านบน -->
+    <div class="top-bar">
+        <div class="close-btn" onclick="alert('ปิดหน้าจอ (เตรียมเชื่อมกับ LINE LIFF)')">✕</div>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('expense', this)">
+                <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> รายจ่าย
+            </div>
+            <div class="tab" onclick="switchTab('income', this)">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg> รายรับ
+            </div>
+            <div class="tab" onclick="switchTab('transfer', this)">
+                <svg viewBox="0 0 24 24"><path d="M7 10h14l-4-4M17 14H3l4 4"/></svg> ย้ายเงิน
+            </div>
+        </div>
+    </div>
+
+    <!-- พื้นที่เนื้อหา -->
+    <div class="content">
+        <div class="date-display">
+            <svg style="width: 16px; height: 16px; stroke: currentColor; fill: none;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="currentDate">วันนี้</span>
+        </div>
+
+        <div class="amount-box">
+            <div id="typeIcon" class="amount-icon color-expense">↑</div>
+            <input type="number" id="amount" class="amount-input" placeholder="0">
+            <div class="currency">฿</div>
+        </div>
+
+        <div class="form-box" id="categoryBox">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <select id="category">
+                <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
+                <option value="อาหาร">🍔 อาหาร</option>
+                <option value="เดินทาง">🚗 เดินทาง</option>
+                <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
+                <option value="ทั่วไป">ทั่วไป</option>
+            </select>
+        </div>
+
+        <div class="form-box">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <input type="text" id="note" placeholder="เพิ่มโน้ต">
+        </div>
+
+        <div class="transfer-note" id="transferNote">
+            รายการย้ายเงิน ไม่นับเป็นรายจ่าย/รายรับ<br>ใช้จดการย้ายเงินข้ามบัญชี เติมเงินวอลเล็ท จ่ายหนี้
+        </div>
+
+        <button class="save-btn" onclick="saveRecord()">บันทึก</button>
+    </div>
+
+    <script>
+        let currentType = 'expense';
+
+        // ใส่วันที่ปัจจุบัน
+        const dateOptions = {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        };
+        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('th-TH', dateOptions);
+
+        function switchTab(type, element) {
+            currentType = type;
+
+            // เปลี่ยน Active Tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            element.classList.add('active');
+
+            // จัดการสีไอคอนลูกศร
+            const icon = document.getElementById('typeIcon');
+            const catBox = document.getElementById('categoryBox');
+            const tNote = document.getElementById('transferNote');
+
+            icon.className = 'amount-icon'; // reset class
+
+            if (type === 'expense') {
+                icon.innerText = '↑';
+                icon.classList.add('color-expense');
+                catBox.style.display = 'flex';
+                tNote.style.display = 'none';
+                updateCategoryOptions('expense');
+            } else if (type === 'income') {
+                icon.innerText = '↓';
+                icon.classList.add('color-income');
+                catBox.style.display = 'flex';
+                tNote.style.display = 'none';
+                updateCategoryOptions('income');
+            } else if (type === 'transfer') {
+                icon.innerText = '⇄';
+                icon.classList.add('color-transfer');
+                catBox.style.display = 'none'; // ซ่อนหมวดหมู่เวลาย้ายเงิน
+                tNote.style.display = 'block';
+            }
+        }
+
+        function updateCategoryOptions(type) {
+            const select = document.getElementById('category');
+            if (type === 'expense') {
+                select.innerHTML = `
+                    <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
+                    <option value="อาหาร">🍔 อาหาร</option>
+                    <option value="เดินทาง">🚗 เดินทาง</option>
+                    <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
+                    <option value="รายจ่ายต้องชำระต่อเดือน">บิลรายเดือน</option>
+                    <option value="ทั่วไป">ทั่วไป</option>`;
+            } else {
+                select.innerHTML = `
+                    <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
+                    <option value="เงินเดือน">💰 เงินเดือน</option>
+                    <option value="จากพ่อแม่">พ่อแม่</option>
+                    <option value="อื่นๆ">อื่นๆ</option>`;
+            }
+        }
+
+        function saveRecord() {
+            const amount = document.getElementById('amount').value;
+            if (!amount) {
+                alert("กรุณาใส่จำนวนเงินครับ!");
+                return;
+            }
+            alert(`เตรียมส่งข้อมูล:\nประเภท: ${currentType}\nยอดเงิน: ${amount}\nรอเชื่อมต่อกับ Backend ในสเตปถัดไป!`);
+        }
+    </script>
+</body>
+
+</html>
