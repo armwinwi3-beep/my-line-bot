@@ -4,18 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MoneyBase - สรุปรายรับรายจ่าย</title>
-    <!-- โหลดฟอนต์ Noto Sans Thai -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Thai', sans-serif; }
         body { background-color: #0B192C; color: white; height: 100vh; overflow: hidden; }
         
-        /* ============================
-           หน้าหลัก (Home Page)
-           ============================ */
+        /* หน้าหลัก (Home Page) */
         #home-page { height: 100vh; display: flex; flex-direction: column; position: relative; }
-        
-        /* การ์ดสีเหลืองด้านบน */
         .yellow-card { background-color: #FACC15; color: #1e293b; padding: 20px; border-radius: 15px; margin: 20px 15px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
         .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
@@ -25,16 +20,20 @@
         .expense-amount { font-size: 32px; font-weight: 700; line-height: 1; }
         .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
         
-        /* รายการวันนี้ */
+        /* พื้นที่แสดงรายการ */
+        #records-container { flex: 1; overflow-y: auto; padding-bottom: 90px; }
         .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
         .daily-sidebar { width: 60px; text-align: center; padding-top: 15px; border-left: 4px solid #FACC15; color: #FACC15; }
         .daily-text { font-size: 12px; }
         .daily-number { font-size: 20px; font-weight: bold; }
         .daily-content { flex: 1; background-color: #11223A; padding: 15px; }
-        .daily-header { display: flex; justify-content: flex-end; color: #94a3b8; font-size: 14px; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+        .daily-header { display: flex; justify-content: flex-end; font-size: 14px; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
         .empty-state { text-align: center; color: #f8fafc; font-size: 16px; padding: 30px 0; font-weight: 300; }
+        .transaction-item { display: flex; justify-content: space-between; margin-top: 15px; font-size: 14px; }
+        .transaction-cat { color: white; font-weight: 500; }
+        .transaction-sub { color: #94a3b8; font-size: 12px; margin-top: 2px; }
 
-        /* ปุ่มลอย (FAB) "จดเพิ่ม" */
+        /* ปุ่มลอย "จดเพิ่ม" */
         .fab-container { position: absolute; bottom: 80px; width: 100%; display: flex; justify-content: center; }
         .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; }
         
@@ -44,44 +43,32 @@
         .nav-item.active { color: #0066FF; font-weight: 600; }
         .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-
-        /* ============================
-           หน้าฟอร์มจดบัญชี (Form Page)
-           ============================ */
+        /* หน้าฟอร์มจดบัญชี (Form Page) */
         #form-page { height: 100vh; display: none; flex-direction: column; background-color: #0B192C; }
-        
         .top-bar { background-color: #FACC15; padding: 20px 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 24px; color: #1e293b; font-weight: bold; cursor: pointer; padding-bottom: 10px;}
-        
         .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; }
-        .tab { flex: 1; padding: 10px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.3s; }
+        .tab { flex: 1; padding: 10px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
         .tab.active { background-color: #0B192C; color: white; border-radius: 10px 10px 0 0; }
-        
         .content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
-        .date-display { font-size: 14px; color: #60a5fa; display: flex; align-items: center; gap: 5px; font-weight: 500; }
-        
+        .date-display { font-size: 14px; color: #60a5fa; font-weight: 500; }
         .amount-box { background-color: #11223A; border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 15px; }
         .amount-icon { font-size: 30px; font-weight: bold; }
         .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; }
         .amount-input { background: transparent; border: none; outline: none; color: white; font-size: 40px; width: 100%; font-weight: 300; }
         .amount-input::placeholder { color: #475569; }
         .currency { color: #475569; font-size: 30px; font-weight: 300; }
-        
         .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .form-box input, .form-box select { background: transparent; border: none; outline: none; color: white; font-size: 16px; width: 100%; }
         .form-box select { color: #60a5fa; appearance: none; }
-        
         .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
         .transfer-note { color: #94a3b8; font-size: 12px; text-align: center; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- ==========================================
-         หน้าหลัก (Home Page)
-         ========================================== -->
+    <!-- หน้าหลัก (Home Page) -->
     <div id="home-page">
-        <!-- การ์ดเหลือง -->
         <div class="yellow-card">
             <div class="month-selector">
                 <span onclick="changeMonth(-1)">&lt;</span>
@@ -91,31 +78,20 @@
             <div class="expense-summary">
                 <div>
                     <div class="expense-text">ยอดใช้จ่าย</div>
-                    <div class="expense-amount">0 ฿</div>
+                    <div class="expense-amount" id="displayTotalExpense">... ฿</div>
                 </div>
-                <button class="summary-btn">
+                <button class="summary-btn" onclick="alert('เดี๋ยวเอาไว้โชว์สรุปสวยๆ ครับ')">
                     <svg style="width: 16px; height: 16px; fill: white;" viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
                     ดูสรุป
                 </button>
             </div>
         </div>
 
-        <!-- รายการของวันนี้ (ลบแบนเนอร์ออกแล้วขยับขึ้นมา) -->
-        <div class="daily-section">
-            <div class="daily-sidebar">
-                <div class="daily-text">วันนี้</div>
-                <div class="daily-number" id="todayDateNumber">6</div>
-            </div>
-            <div class="daily-content">
-                <div class="daily-header">
-                    <span>↑ รายจ่าย</span>
-                    <span style="color:white;">0</span>
-                </div>
-                <div class="empty-state">ไม่มีรายการ</div>
-            </div>
+        <!-- คอนเทนเนอร์แสดงรายการของเดือนที่เลือก -->
+        <div id="records-container">
+            <div class="empty-state">กำลังโหลดข้อมูล...</div>
         </div>
 
-        <!-- ปุ่มจดเพิ่ม (เปิดฟอร์ม) -->
         <div class="fab-container">
             <button class="fab-btn" onclick="openForm()">
                 <svg style="width: 20px; height: 20px; stroke: white; fill: none; stroke-width: 2;" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -123,7 +99,6 @@
             </button>
         </div>
 
-        <!-- เมนูด้านล่าง -->
         <div class="bottom-nav">
             <div class="nav-item active">
                 <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -136,12 +111,8 @@
         </div>
     </div>
 
-
-    <!-- ==========================================
-         หน้าฟอร์มจดบัญชี (Form Page)
-         ========================================== -->
+    <!-- หน้าฟอร์มจดบัญชี (Form Page) -->
     <div id="form-page">
-        <!-- แถบด้านบนของฟอร์ม -->
         <div class="top-bar">
             <div class="close-btn" onclick="closeForm()">✕</div>
             <div class="tabs">
@@ -150,19 +121,15 @@
                 <div class="tab" onclick="switchTab('transfer', this)">ย้ายเงิน</div>
             </div>
         </div>
-
-        <!-- เนื้อหาฟอร์ม -->
         <div class="content">
             <div class="date-display">
-                <span id="formDateDisplay">พฤหัส 6 ส.ค. 69</span>
+                <span id="formDateDisplay">...</span>
             </div>
-
             <div class="amount-box">
                 <div id="typeIcon" class="amount-icon color-expense">↑</div>
                 <input type="number" id="amount" class="amount-input" placeholder="0">
                 <div class="currency">฿</div>
             </div>
-
             <div class="form-box" id="categoryBox">
                 <select id="category">
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
@@ -172,55 +139,119 @@
                     <option value="ทั่วไป">ทั่วไป</option>
                 </select>
             </div>
-
             <div class="form-box">
                 <input type="text" id="note" placeholder="เพิ่มโน้ต">
             </div>
-            
             <div class="transfer-note" id="transferNote">
                 รายการย้ายเงิน ไม่นับเป็นรายจ่าย/รายรับ<br>ใช้จดการย้ายเงินข้ามบัญชี เติมเงินวอลเล็ท จ่ายหนี้
             </div>
-
             <button class="save-btn" onclick="saveRecord()">บันทึก</button>
         </div>
     </div>
 
     <script>
-        // ข้อมูลวันที่พื้นฐาน
         const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
         
-        let currentDate = new Date(); // วันนี้จริงๆ 
-        let viewDate = new Date(); // วันที่สำหรับเลื่อนดูเดือนอื่นๆ
+        let currentDate = new Date(); 
+        let viewDate = new Date(); 
 
-        // ฟังก์ชันอัปเดตหน้าจอวันที่
         function updateDateDisplay() {
-            // อัปเดตเดือนตรงหัวข้อการ์ด (สามารถเปลี่ยนไปมาได้)
             const viewM = thMonths[viewDate.getMonth()];
             const viewY = (viewDate.getFullYear() + 543).toString().slice(-2);
             document.getElementById('monthYearDisplay').innerText = `📅 ${viewM} ${viewY}`;
 
-            // อัปเดตวันที่วันนี้ (ยึดตามวันจริงเสมอ)
             const d = currentDate.getDate();
             const currM = thMonths[currentDate.getMonth()];
             const currY = (currentDate.getFullYear() + 543).toString().slice(-2);
             const dayName = thDays[currentDate.getDay()];
-            
-            document.getElementById('todayDateNumber').innerText = d;
             document.getElementById('formDateDisplay').innerText = `📅 ${dayName} ${d} ${currM} ${currY}`;
+            
+            fetchMonthData();
         }
 
-        // ฟังก์ชันเมื่อกดลูกศรเปลี่ยนเดือน
         function changeMonth(direction) {
             viewDate.setMonth(viewDate.getMonth() + direction);
             updateDateDisplay();
-            // TODO: สเตปต่อไปคือเขียนคำสั่งดึงข้อมูลรายเดือนจาก Python มาแสดงตรงนี้ครับ
         }
 
-        // เรียกใช้อัปเดตวันครั้งแรกตอนโหลดหน้า
+        async function fetchMonthData() {
+            document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
+            
+            const m = String(viewDate.getMonth() + 1).padStart(2, '0');
+            const y = String(viewDate.getFullYear()).slice(-2);
+            const monthStr = `${m}/${y}`; // ตัวอย่าง 08/26
+
+            try {
+                const response = await fetch(`/api/data?month=${monthStr}`);
+                const data = await response.json();
+                
+                document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
+                renderRecords(data.records);
+            } catch (error) {
+                document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+            }
+        }
+
+        function renderRecords(records) {
+            const container = document.getElementById('records-container');
+            if (!records || records.length === 0) {
+                container.innerHTML = '<div class="empty-state">ไม่มีรายการในเดือนนี้</div>';
+                return;
+            }
+
+            // จัดกลุ่มรายการตามวันที่
+            const grouped = {};
+            records.forEach(r => {
+                if (!grouped[r.date]) grouped[r.date] = { expense: 0, income: 0, items: [] };
+                if (r.type.includes('รายจ่าย')) grouped[r.date].expense += r.amount;
+                if (r.type === 'รายรับ') grouped[r.date].income += r.amount;
+                grouped[r.date].items.push(r);
+            });
+
+            // เรียงวันที่จากใหม่ไปเก่า
+            const sortedDates = Object.keys(grouped).sort((a, b) => {
+                const [d1, m1, y1] = a.split('/');
+                const [d2, m2, y2] = b.split('/');
+                return new Date(y2, m2-1, d2) - new Date(y1, m1-1, d1);
+            });
+
+            let html = '';
+            sortedDates.forEach(date => {
+                const dayNum = parseInt(date.split('/')[0]);
+                const g = grouped[date];
+                
+                html += `
+                <div class="daily-section">
+                    <div class="daily-sidebar">
+                        <div class="daily-text">วันที่</div>
+                        <div class="daily-number">${dayNum}</div>
+                    </div>
+                    <div class="daily-content">
+                        <div class="daily-header">
+                            ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
+                            ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
+                        </div>
+                        ${g.items.map(item => `
+                            <div class="transaction-item">
+                                <div>
+                                    <div class="transaction-cat">${item.category}</div>
+                                    <div class="transaction-sub">${item.account} ${item.note !== '-' ? `(${item.note})` : ''}</div>
+                                </div>
+                                <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
+                                    ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
         updateDateDisplay();
 
-        // ระบบเปิด/ปิดฟอร์ม
+        // ---------------- ระบบ Form ----------------
         function openForm() {
             document.getElementById('home-page').style.display = 'none';
             document.getElementById('form-page').style.display = 'flex';
@@ -229,9 +260,9 @@
         function closeForm() {
             document.getElementById('form-page').style.display = 'none';
             document.getElementById('home-page').style.display = 'flex';
+            fetchMonthData(); // รีเฟรชข้อมูลใหม่ตอนปิดฟอร์ม
         }
 
-        // ระบบสลับแท็บในฟอร์ม
         let currentType = 'expense';
         function switchTab(type, element) {
             currentType = type;
@@ -243,7 +274,6 @@
             const tNote = document.getElementById('transferNote');
 
             icon.className = 'amount-icon'; 
-            
             if (type === 'expense') {
                 icon.innerText = '↑';
                 icon.classList.add('color-expense');
@@ -272,6 +302,7 @@
                     <option value="อาหาร">🍔 อาหาร</option>
                     <option value="เดินทาง">🚗 เดินทาง</option>
                     <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
+                    <option value="รายจ่ายต้องชำระต่อเดือน">บิลรายเดือน</option>
                     <option value="ทั่วไป">ทั่วไป</option>`;
             } else {
                 select.innerHTML = `
@@ -282,14 +313,40 @@
             }
         }
 
-        function saveRecord() {
+        async function saveRecord() {
             const amount = document.getElementById('amount').value;
-            if(!amount) {
-                alert("กรุณาใส่จำนวนเงินครับ!");
-                return;
+            const category = document.getElementById('category').value;
+            const note = document.getElementById('note').value;
+
+            if(!amount) { alert("⚠️ กรุณาใส่จำนวนเงินด้วยครับ!"); return; }
+            if(currentType !== 'transfer' && !category) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
+
+            const btn = document.querySelector('.save-btn');
+            const originalText = btn.innerText;
+            btn.innerText = "กำลังบันทึก... ⏳";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: currentType, amount: amount, category: category, note: note })
+                });
+                const result = await response.json();
+                
+                if(result.status === 'success') {
+                    document.getElementById('amount').value = '';
+                    document.getElementById('category').value = '';
+                    document.getElementById('note').value = '';
+                    closeForm();
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด: ' + result.message);
+                }
+            } catch (error) {
+                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
             }
-            alert(`เตรียมส่งข้อมูล:\nประเภท: ${currentType}\nยอดเงิน: ${amount}\nเดี๋ยวเราจะเขียนโค้ด Python มารับค่าตรงนี้ครับ!`);
-            closeForm(); // บันทึกเสร็จให้เด้งกลับหน้าแรก
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     </script>
 </body>
