@@ -28,20 +28,24 @@ def api_add():
     amount = data.get('amount')
     category = data.get('category')
     note = data.get('note', '-')
+    status_val = data.get('status', '-') # 🌟 รับค่าสถานะจากเว็บมาด้วย
     
-    if record_type == 'expense': type_th = "รายจ่าย"
-    elif record_type == 'income': type_th = "รายรับ"
-    elif record_type == 'transfer': type_th = "ย้ายเงิน"
-    else: type_th = "ไม่ระบุ"
+    if record_type == 'expense': 
+        type_th = "รายจ่าย"
+        status_val = "-"
+    elif record_type == 'income': 
+        type_th = "รายรับ"
+        status_val = "-"
+    elif record_type == 'transfer': 
+        type_th = "ย้ายเงิน"
+        status_val = "-"
+    elif record_type == 'bill': 
+        type_th = "รายจ่ายต้องชำระต่อเดือน"
+        # status_val ใช้ตามที่เว็บส่งมา (จ่ายแล้ว / ยังไม่จ่าย)
+    else: 
+        type_th = "ไม่ระบุ"
         
     if not category: category = "-"
-
-    # 🌟 เช็คว่าเป็นหมวดหมู่บิลหรือไม่ ถ้าใช่ให้เซ็ตเป็นรายจ่ายรายเดือน
-    monthly_bill_cats = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"]
-    status_val = "-"
-    if type_th == "รายจ่าย" and category in monthly_bill_cats:
-        type_th = "รายจ่ายต้องชำระต่อเดือน"
-        status_val = "จ่ายแล้ว"
 
     try:
         worksheet = get_current_worksheet()
@@ -49,6 +53,7 @@ def api_add():
         date_str = now.strftime("%d/%m/%Y")
         time_str = now.strftime("%H:%M:%S")
 
+        # บันทึกลงชีต (คอลัมน์สถานะจะอยู่ตำแหน่งที่ 8 index 8)
         worksheet.append_row([date_str, time_str, type_th, amount, "รอระบุบัญชี", category, "-", note, status_val, "-"])
         return jsonify({"status": "success", "message": "บันทึกเรียบร้อย"})
     except Exception as e:
@@ -78,7 +83,6 @@ def api_data():
                     account = row[4]
                     cat = row[5]
                     note = row[7] if len(row) > 7 else "-"
-                    # 🌟 ดึงสถานะบิลมาเช็คด้วย (ถ้าไม่มีให้ถือว่าจ่ายแล้ว)
                     status = row[8] if len(row) > 8 and str(row[8]).strip() != "" else "จ่ายแล้ว"
 
                     if record_type == "รายจ่าย" or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status != "ยังไม่จ่าย"):
@@ -93,7 +97,7 @@ def api_data():
                         "category": cat,
                         "account": account,
                         "note": note,
-                        "status": status  # 🌟 ส่งสถานะกลับไปให้เว็บด้วย
+                        "status": status 
                     })
                 except ValueError:
                     pass
