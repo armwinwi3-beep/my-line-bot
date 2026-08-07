@@ -390,7 +390,7 @@
                             ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
                             ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
                         </div>
-                        ${g.items.slice().reverse().map(item => { /* 🌟 ใช้ slice().reverse() เพื่อสลับให้ล่าสุดอยู่บน */
+                        ${g.items.slice().reverse().map(item => { 
                             let displayCat = item.category;
                             let displaySub = `${item.account !== '-' ? item.account : ''} ${item.note !== '-' ? `(${item.note})` : ''}`.trim();
                             if (item.type === 'ย้ายเงิน') {
@@ -420,7 +420,6 @@
             let paidHtml = '';
             let unpaidHtml = '';
 
-            // 🌟 ให้บิลล่าสุดโชว์ขึ้นก่อน
             const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
 
             bills.forEach(b => {
@@ -462,7 +461,25 @@
             document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
             
             let finalHtml = '';
-            if (unpaidHtml !== '') finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿) - กดที่บิลเพื่อชำระ:</h3>` + unpaidHtml + `<br>`;
+            
+            // 🌟 คำนวณเป้าหมายเก็บเงินรายวันสำหรับบิลที่ค้างชำระ
+            if (totalUnpaid > 0) {
+                let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+                let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+                let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
+                let dailySave = totalUnpaid / Math.max(1, remainingDays);
+
+                let saveHtml = `
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล (เหลือ ${remainingDays} วัน)</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                    </div>
+                </div>`;
+
+                finalHtml += saveHtml;
+                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
+            }
             
             finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
             if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
@@ -495,6 +512,11 @@
             let maxVal = Math.max(totalInc, totalExp);
             let incWidth = maxVal > 0 ? (totalInc / maxVal) * 100 : 0;
             let expWidth = maxVal > 0 ? (totalExp / maxVal) * 100 : 0;
+            
+            // 🌟 คำนวณค่าเฉลี่ยรายวัน
+            let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+            let daysDivisor = isCurrentMonth ? currentDate.getDate() : new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            let avgDailyExp = totalExp / Math.max(1, daysDivisor);
 
             let comparisonHtml = `
                 <div class="insight-box" style="background: #11223A; box-shadow: none; border: 1px solid #1e293b;">
@@ -518,6 +540,12 @@
                         <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
                             <div style="background-color: #ef4444; height: 100%; border-radius: 5px; width: ${expWidth}%; transition: width 0.5s;"></div>
                         </div>
+                    </div>
+                    
+                    <!-- 🌟 ส่วนแสดงยอดเฉลี่ยรายวัน -->
+                    <div style="background-color: #1e293b; padding: 12px; border-radius: 8px; margin-top: 18px; text-align: center;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 2px;">เฉลี่ยใช้จ่ายไปแล้ววันละ (หาร ${daysDivisor} วัน)</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #facc15;">${avgDailyExp.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
                     </div>
                 </div>
             `;
