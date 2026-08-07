@@ -228,8 +228,8 @@
         let currentDate = new Date(); 
         let viewDate = new Date(); 
         let currentRecords = [];
-        
         let currentAccountBalances = {};
+        let currentTotalBalance = 0; // 🌟 เก็บยอดคงเหลือทั้งหมดมาไว้คำนวณ
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
@@ -337,8 +337,9 @@
                 
                 currentRecords = data.records || []; 
                 currentAccountBalances = data.account_balances || {};
+                currentTotalBalance = data.total_balance || 0; // 🌟 เก็บยอดคงเหลือปัจจุบัน
                 
-                document.getElementById('displayTotalBalance').innerText = (data.total_balance || 0).toLocaleString('th-TH') + ' ฿';
+                document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
                 
                 if (document.getElementById('home-page').classList.contains('active')) {
@@ -466,15 +467,25 @@
                 let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
                 let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
                 let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
-                let dailySave = totalUnpaid / Math.max(1, remainingDays);
 
-                let saveHtml = `
-                <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล (เหลือ ${remainingDays} วัน)</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
-                    </div>
-                </div>`;
+                // 🌟 หักลบเงินที่มีอยู่ปัจจุบัน ออกจากยอดบิลที่ค้างชำระ
+                let remainingToSave = totalUnpaid - currentTotalBalance;
+                
+                let saveHtml = '';
+                if (remainingToSave <= 0) {
+                    saveHtml = `
+                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px dashed #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #86efac; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือพอจ่ายบิลทั้งหมดแล้วครับ!</div>
+                    </div>`;
+                } else {
+                    let dailySave = remainingToSave / Math.max(1, remainingDays);
+                    saveHtml = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงิน (ขาดเงินอีก ${remainingToSave.toLocaleString('th-TH')} ฿ • เหลือ ${remainingDays} วัน)</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินเพิ่มวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                    </div>`;
+                }
 
                 finalHtml += saveHtml;
                 finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
@@ -562,7 +573,6 @@
 
                 barsHtml = sortedCats.map(item => {
                     const percent = Math.round((item[1] / totalExp) * 100);
-                    // 🌟 เพิ่มคำนวณเฉลี่ยรายวันสำหรับแต่ละหมวดหมู่
                     const catDailyAvg = item[1] / Math.max(1, daysDivisor);
                     
                     return `
