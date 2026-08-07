@@ -17,7 +17,6 @@
         .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
         .month-selector span:hover { opacity: 0.7; }
         
-        /* 🌟 จัด Layout การ์ดเหลืองใหม่ให้ดูสวยและมี 2 ยอด */
         .expense-summary { display: flex; justify-content: space-between; align-items: flex-start; }
         .expense-text { font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 2px; }
         .expense-amount { font-size: 32px; font-weight: 700; line-height: 1.2; color: #0B192C; }
@@ -87,7 +86,6 @@
                 <span onclick="changeMonth(1)">&gt;</span>
             </div>
             
-            <!-- 🌟 ปรับโครงสร้างเพื่อแสดง 2 ยอด (ยอดคงเหลือรวม และ ยอดใช้จ่าย) -->
             <div class="expense-summary">
                 <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
                     <div>
@@ -231,7 +229,6 @@
         let viewDate = new Date(); 
         let currentRecords = [];
         
-        // 🌟 ตัวแปรเก็บยอดคงเหลือบัญชีทั้งหมด เพื่อไปแสดงที่หน้าสรุป
         let currentAccountBalances = {};
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
@@ -341,7 +338,6 @@
                 currentRecords = data.records || []; 
                 currentAccountBalances = data.account_balances || {};
                 
-                // อัปเดตหน้าการ์ดสีเหลือง
                 document.getElementById('displayTotalBalance').innerText = (data.total_balance || 0).toLocaleString('th-TH') + ' ฿';
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
                 
@@ -394,7 +390,7 @@
                             ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
                             ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
                         </div>
-                        ${g.items.map(item => {
+                        ${g.items.slice().reverse().map(item => { /* 🌟 ใช้ slice().reverse() เพื่อสลับให้ล่าสุดอยู่บน */
                             let displayCat = item.category;
                             let displaySub = `${item.account !== '-' ? item.account : ''} ${item.note !== '-' ? `(${item.note})` : ''}`.trim();
                             if (item.type === 'ย้ายเงิน') {
@@ -424,7 +420,8 @@
             let paidHtml = '';
             let unpaidHtml = '';
 
-            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน');
+            // 🌟 ให้บิลล่าสุดโชว์ขึ้นก่อน
+            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
 
             bills.forEach(b => {
                 if (b.status === 'ยังไม่จ่าย') {
@@ -474,7 +471,6 @@
             document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
-        // 🌟 อัปเดตหน้าสรุป นำยอดเงินคงเหลือแต่ละบัญชีมาโชว์
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -549,7 +545,6 @@
                 }).join('');
             }
 
-            // 🌟 สร้าง HTML แสดงยอดคงเหลือแต่ละบัญชี
             let accountBalancesHtml = `
                 <div class="insight-box" style="background: #0B192C; border: 1px solid #1e293b; padding-bottom: 5px;">
                     <div style="font-size: 16px; font-weight: 600; margin-bottom: 15px; color: white;">💰 ยอดเงินคงเหลือแต่ละบัญชี</div>
