@@ -12,6 +12,14 @@
         .page { height: 100vh; display: none; flex-direction: column; }
         .page.active { display: flex; }
         
+        /* 🌟 สไตล์กล่องแจ้งเตือนลอยๆ (Toast) */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #22c55e; color: white; padding: 10px 20px; border-radius: 30px;
+            font-size: 14px; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 9999; display: none; transition: 0.3s; white-space: nowrap;
+        }
+
         .yellow-card { background-color: #FACC15; color: #1e293b; padding: 20px; border-radius: 15px; margin: 20px 15px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
         .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
@@ -76,6 +84,9 @@
     </style>
 </head>
 <body>
+
+    <!-- แถบแจ้งเตือนลอย -->
+    <div id="toast" class="toast">กำลังประมวลผล...</div>
 
     <!-- 1. หน้าหลัก -->
     <div id="home-page" class="page active">
@@ -224,7 +235,6 @@
     <script>
         const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
-        
         const billCategories = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"];
         
         let currentDate = new Date(); 
@@ -232,20 +242,28 @@
         let currentRecords = [];
         let currentAccountBalances = {};
         let currentTotalBalance = 0; 
-        
-        // 🌟 ตัวแปรเก็บรายรับจำลอง
         let simulatedIncome = 0;
+
+        // 🌟 ระบบ Toast Message แจ้งเตือนลอย
+        function showToast(msg, isError = false) {
+            let t = document.getElementById('toast');
+            t.style.background = isError ? '#ef4444' : '#f59e0b'; // สีส้มตอนกำลังโหลด
+            if(msg.includes('สำเร็จ')) t.style.background = '#22c55e'; // สีเขียวตอนเสร็จ
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
-        function openHome() {
+        function openHome(silent = false) {
             hideAllPages();
             document.getElementById('home-page').classList.add('active');
             document.getElementById('main-nav').style.display = 'flex';
             document.getElementById('fab-button').style.display = 'flex';
             document.getElementById('nav-home').classList.add('active');
             document.getElementById('nav-bills').classList.remove('active');
-            fetchMonthData(); 
+            if(!silent) fetchMonthData(); 
         }
 
         function openBills() {
@@ -290,7 +308,6 @@
             toggleBillAccountBox();
         }
 
-        // 🌟 ฟังก์ชันจัดการโหมดจำลอง
         function applySimulation() {
             const val = parseFloat(document.getElementById('demo-income-input').value);
             if(!isNaN(val) && val >= 0) {
@@ -305,24 +322,29 @@
         }
 
         async function deleteRecord(date, amount, category, sheetName) {
-            if(!confirm(`⚠️ ต้องการลบรายการ "${category}" (${amount.toLocaleString('th-TH')} ฿) ใช่ไหมครับ?`)) return;
+            if(!confirm(`⚠️ ต้องการลบรายการ "${category}" ใช่ไหมครับ?`)) return;
 
-            try {
-                const response = await fetch('/api/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: date, amount: amount, category: category, month: sheetName })
-                });
-                const result = await response.json();
-                
+            showToast("🗑️ กำลังลบข้อมูลหลังบ้าน...");
+            
+            // ส่งไปลบเบื้องหลัง
+            fetch('/api/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: date, amount: amount, category: category, month: sheetName })
+            })
+            .then(res => res.json())
+            .then(result => {
                 if(result.status === 'success') {
-                    fetchMonthData(); 
+                    showToast("✅ ลบสำเร็จ");
+                    fetchMonthData(true); 
                 } else {
-                    alert('❌ ลบไม่สำเร็จ: ' + result.message);
+                    showToast('❌ ' + result.message, true);
                 }
-            } catch (error) {
-                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
-            }
+            }).catch(e => { showToast('❌ ขาดการเชื่อมต่อ', true); });
+
+            // 🌟 หลอกตาลบออกจากหน้าจอไปก่อนทันที
+            currentRecords = currentRecords.filter(r => !(r.date === date && r.amount === amount && r.category === category));
+            renderRecords(currentRecords);
         }
 
         function updateDateDisplay() {
@@ -344,8 +366,12 @@
             updateDateDisplay();
         }
 
-        async function fetchMonthData() {
-            document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
+        // 🌟 เพิ่ม silent mode เพื่อซ่อนการโหลดเมื่อแอบทำงานเบื้องหลัง
+        async function fetchMonthData(silent = false) {
+            if(!silent) {
+                document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
+            }
+            
             const m = String(viewDate.getMonth() + 1).padStart(2, '0');
             const y = String(viewDate.getFullYear()).slice(-2);
             const monthStr = `${m}/${y}`; 
@@ -365,9 +391,11 @@
                     renderRecords(currentRecords);
                 } else if (document.getElementById('bills-page').classList.contains('active')) {
                     renderBills();
+                } else if (document.getElementById('summary-page').classList.contains('active')) {
+                    renderSummary();
                 }
             } catch (error) {
-                document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+                if(!silent) document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
             }
         }
 
@@ -480,7 +508,6 @@
 
             document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
             
-            // 🌟 กล่อง UI สำหรับโหมดจำลอง (แทรกไว้บนสุดของ list)
             let demoHtml = `
             <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
                 <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลอง (Demo)</div>
@@ -499,7 +526,6 @@
                 let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
                 let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
 
-                // 🌟 คำนวณโดยนำเงินจำลองมารวมกับเงินปัจจุบัน
                 let effectiveBalance = currentTotalBalance + simulatedIncome;
                 let remainingToSave = totalUnpaid - effectiveBalance;
                 
@@ -795,33 +821,31 @@
                 payload.status = statusVal;
             }
 
-            const btn = document.querySelector('.save-btn');
-            const originalText = btn.innerText;
-            btn.innerText = "กำลังบันทึก... ⏳";
-            btn.disabled = true;
+            // 🌟 สร้างระบบหลอกตา (Optimistic UI) 
+            showToast("⏳ กำลังบันทึกเบื้องหลัง...");
+            
+            // ปิดฟอร์มกลับหน้าโฮมทันที แบบไม่ต้องโหลดใหม่
+            openHome(true); 
+            
+            // เคลียร์ฟอร์ม
+            document.getElementById('amount').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('account').value = '';
+            document.getElementById('note').value = '';
 
-            try {
-                const response = await fetch('/api/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                
+            // ส่งคำสั่งเซฟลง Google Sheets
+            fetch('/api/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(res => res.json()).then(result => {
                 if(result.status === 'success') {
-                    document.getElementById('amount').value = '';
-                    document.getElementById('category').value = '';
-                    document.getElementById('account').value = '';
-                    document.getElementById('note').value = '';
-                    openHome(); 
+                    showToast("✅ บันทึกและซิงค์ข้อมูลสำเร็จ");
+                    fetchMonthData(true); // โหลดข้อมูลจริงๆ มาทับแบบเงียบๆ
                 } else {
-                    alert('❌ เกิดข้อผิดพลาด: ' + result.message);
+                    showToast('❌ ' + result.message, true);
                 }
-            } catch (error) {
-                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
-            }
-            btn.innerText = originalText;
-            btn.disabled = false;
+            }).catch(e => { showToast('❌ ขาดการเชื่อมต่อ', true); });
         }
     </script>
 </body>
