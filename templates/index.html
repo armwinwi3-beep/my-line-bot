@@ -225,7 +225,6 @@
         const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
         
-        // 🌟 เพิ่มรายการหมวดหมู่บิลไว้สำหรับเช็ค
         const billCategories = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"];
         
         let currentDate = new Date(); 
@@ -504,6 +503,7 @@
             let expensesByCategory = {};
             let totalExp = 0;
             let totalInc = 0;
+            let totalGeneralExp = 0; // 🌟 เก็บยอดที่ไม่ได้เป็นบิล เพื่อหารรายวัน
 
             currentRecords.forEach(r => {
                 if(r.status === 'ยังไม่จ่าย') return; 
@@ -512,6 +512,11 @@
                     const cat = r.category || 'ไม่ระบุ';
                     expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
                     totalExp += r.amount;
+                    
+                    // 🌟 ถ้าเป็นรายจ่ายทั่วไป (ไม่ใช่บิล) ให้บวกเข้า totalGeneralExp
+                    if (r.type === 'รายจ่าย') {
+                        totalGeneralExp += r.amount;
+                    }
                 } else if(r.type === 'รายรับ') {
                     totalInc += r.amount;
                 }
@@ -528,7 +533,10 @@
             let daysInMonthSummary = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
             let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
             let daysDivisor = isCurrentMonth ? currentDate.getDate() : daysInMonthSummary;
-            let avgDailyExp = totalExp / Math.max(1, daysDivisor);
+            
+            // 🌟 คำนวณเฉลี่ย 2 แบบ
+            let avgDailyExpTotal = totalExp / Math.max(1, daysDivisor);
+            let avgDailyExpGeneral = totalGeneralExp / Math.max(1, daysDivisor);
 
             let comparisonHtml = `
                 <div class="insight-box" style="background: #11223A; box-shadow: none; border: 1px solid #1e293b;">
@@ -546,7 +554,7 @@
 
                     <div>
                         <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
-                            <span style="color: #ef4444;">รายจ่าย</span>
+                            <span style="color: #ef4444;">รายจ่าย (รวมบิล)</span>
                             <span style="color: #ef4444; font-weight: 600;">-${totalExp.toLocaleString('th-TH')} ฿</span>
                         </div>
                         <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
@@ -554,9 +562,17 @@
                         </div>
                     </div>
                     
-                    <div style="background-color: #1e293b; padding: 12px; border-radius: 8px; margin-top: 18px; text-align: center;">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 2px;">เฉลี่ยใช้จ่ายไปแล้ววันละ (หาร ${daysDivisor} วัน)</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #facc15;">${avgDailyExp.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                    <!-- 🌟 กล่องแยกยอดเฉลี่ยรายวัน -->
+                    <div style="background-color: #1e293b; padding: 12px; border-radius: 8px; margin-top: 18px; display: flex; justify-content: space-between; align-items: center; text-align: center;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">เฉลี่ยรวม (หาร ${daysDivisor} วัน)</div>
+                            <div style="font-size: 18px; font-weight: 700; color: #facc15;">${avgDailyExpTotal.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        </div>
+                        <div style="width: 1px; height: 35px; background-color: #334155; margin: 0 10px;"></div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">ใช้จ่ายรายวัน <span style="color:#38bdf8;">(ไม่รวมบิล)</span></div>
+                            <div style="font-size: 18px; font-weight: 700; color: #38bdf8;">${avgDailyExpGeneral.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -577,7 +593,6 @@
                 barsHtml = sortedCats.map(item => {
                     const percent = Math.round((item[1] / totalExp) * 100);
                     
-                    // 🌟 เช็คว่าเป็นบิลรายเดือนหรือเปล่า ถ้าใช่ให้หารด้วยจำนวนวันทั้งเดือน
                     let divisorToUse = daysDivisor;
                     if (billCategories.includes(item[0])) {
                         divisorToUse = daysInMonthSummary;
