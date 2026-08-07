@@ -225,11 +225,14 @@
         const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
         
+        // 🌟 เพิ่มรายการหมวดหมู่บิลไว้สำหรับเช็ค
+        const billCategories = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"];
+        
         let currentDate = new Date(); 
         let viewDate = new Date(); 
         let currentRecords = [];
         let currentAccountBalances = {};
-        let currentTotalBalance = 0; // 🌟 เก็บยอดคงเหลือทั้งหมดมาไว้คำนวณ
+        let currentTotalBalance = 0; 
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
@@ -337,7 +340,7 @@
                 
                 currentRecords = data.records || []; 
                 currentAccountBalances = data.account_balances || {};
-                currentTotalBalance = data.total_balance || 0; // 🌟 เก็บยอดคงเหลือปัจจุบัน
+                currentTotalBalance = data.total_balance || 0; 
                 
                 document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
@@ -468,7 +471,6 @@
                 let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
                 let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
 
-                // 🌟 หักลบเงินที่มีอยู่ปัจจุบัน ออกจากยอดบิลที่ค้างชำระ
                 let remainingToSave = totalUnpaid - currentTotalBalance;
                 
                 let saveHtml = '';
@@ -523,8 +525,9 @@
             let incWidth = maxVal > 0 ? (totalInc / maxVal) * 100 : 0;
             let expWidth = maxVal > 0 ? (totalExp / maxVal) * 100 : 0;
             
+            let daysInMonthSummary = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
             let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
-            let daysDivisor = isCurrentMonth ? currentDate.getDate() : new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            let daysDivisor = isCurrentMonth ? currentDate.getDate() : daysInMonthSummary;
             let avgDailyExp = totalExp / Math.max(1, daysDivisor);
 
             let comparisonHtml = `
@@ -573,7 +576,14 @@
 
                 barsHtml = sortedCats.map(item => {
                     const percent = Math.round((item[1] / totalExp) * 100);
-                    const catDailyAvg = item[1] / Math.max(1, daysDivisor);
+                    
+                    // 🌟 เช็คว่าเป็นบิลรายเดือนหรือเปล่า ถ้าใช่ให้หารด้วยจำนวนวันทั้งเดือน
+                    let divisorToUse = daysDivisor;
+                    if (billCategories.includes(item[0])) {
+                        divisorToUse = daysInMonthSummary;
+                    }
+                    
+                    const catDailyAvg = item[1] / Math.max(1, divisorToUse);
                     
                     return `
                     <div class="cat-item">
