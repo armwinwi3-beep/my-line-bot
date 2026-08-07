@@ -16,10 +16,14 @@
         .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
         .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
         .month-selector span:hover { opacity: 0.7; }
-        .expense-summary { display: flex; justify-content: space-between; align-items: flex-end; }
-        .expense-text { font-size: 14px; font-weight: 500; margin-bottom: 5px; }
-        .expense-amount { font-size: 32px; font-weight: 700; line-height: 1; }
-        .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+        
+        /* 🌟 จัด Layout การ์ดเหลืองใหม่ให้ดูสวยและมี 2 ยอด */
+        .expense-summary { display: flex; justify-content: space-between; align-items: flex-start; }
+        .expense-text { font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 2px; }
+        .expense-amount { font-size: 32px; font-weight: 700; line-height: 1.2; color: #0B192C; }
+        .expense-sub-amount { font-size: 22px; font-weight: 600; color: #ef4444; }
+
+        .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; margin-top: 10px; }
         
         .records-container { flex: 1; overflow-y: auto; padding-bottom: 90px; }
         .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
@@ -29,9 +33,12 @@
         .daily-content { flex: 1; background-color: #11223A; padding: 15px; }
         .daily-header { display: flex; justify-content: flex-end; font-size: 14px; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
         .empty-state { text-align: center; color: #f8fafc; font-size: 16px; padding: 30px 0; font-weight: 300; }
-        .transaction-item { display: flex; justify-content: space-between; margin-top: 15px; font-size: 14px; }
+        .transaction-item { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 14px; }
         .transaction-cat { color: white; font-weight: 500; }
         .transaction-sub { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+
+        .delete-btn { background: transparent; border: none; color: #64748b; cursor: pointer; font-size: 16px; padding: 5px; transition: 0.2s; }
+        .delete-btn:hover { color: #ef4444; }
 
         .fab-container { position: absolute; bottom: 80px; width: 100%; display: flex; justify-content: center; z-index: 50; }
         .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; }
@@ -79,10 +86,18 @@
                 <span id="monthYearDisplay">📅 ...</span>
                 <span onclick="changeMonth(1)">&gt;</span>
             </div>
+            
+            <!-- 🌟 ปรับโครงสร้างเพื่อแสดง 2 ยอด (ยอดคงเหลือรวม และ ยอดใช้จ่าย) -->
             <div class="expense-summary">
-                <div>
-                    <div class="expense-text">ยอดใช้จ่าย</div>
-                    <div class="expense-amount" id="displayTotalExpense">... ฿</div>
+                <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                    <div>
+                        <div class="expense-text">ยอดเงินคงเหลือรวม (All)</div>
+                        <div class="expense-amount" id="displayTotalBalance">... ฿</div>
+                    </div>
+                    <div>
+                        <div class="expense-text">ยอดใช้จ่ายเดือนนี้</div>
+                        <div class="expense-sub-amount" id="displayTotalExpense">... ฿</div>
+                    </div>
                 </div>
                 <button class="summary-btn" onclick="openSummary()">
                     <svg style="width: 16px; height: 16px; fill: white;" viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
@@ -215,6 +230,9 @@
         let currentDate = new Date(); 
         let viewDate = new Date(); 
         let currentRecords = [];
+        
+        // 🌟 ตัวแปรเก็บยอดคงเหลือบัญชีทั้งหมด เพื่อไปแสดงที่หน้าสรุป
+        let currentAccountBalances = {};
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
@@ -262,13 +280,33 @@
             switchTab('bill', document.querySelectorAll('.tab')[3]); 
         }
 
-        // 🌟 ฟังก์ชันกดจ่ายบิลด่วนจากหน้าบิลค้างชำระ
         function payUnpaidBill(categoryName, amountVal) {
             openFormWithBill();
             document.getElementById('amount').value = amountVal;
             document.getElementById('category').value = categoryName;
             document.getElementById('billStatus').value = 'จ่ายแล้ว';
             toggleBillAccountBox();
+        }
+
+        async function deleteRecord(date, amount, category, sheetName) {
+            if(!confirm(`⚠️ ต้องการลบรายการ "${category}" (${amount.toLocaleString('th-TH')} ฿) ใช่ไหมครับ?`)) return;
+
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: date, amount: amount, category: category, month: sheetName })
+                });
+                const result = await response.json();
+                
+                if(result.status === 'success') {
+                    fetchMonthData(); 
+                } else {
+                    alert('❌ ลบไม่สำเร็จ: ' + result.message);
+                }
+            } catch (error) {
+                alert('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+            }
         }
 
         function updateDateDisplay() {
@@ -301,6 +339,10 @@
                 const data = await response.json();
                 
                 currentRecords = data.records || []; 
+                currentAccountBalances = data.account_balances || {};
+                
+                // อัปเดตหน้าการ์ดสีเหลือง
+                document.getElementById('displayTotalBalance').innerText = (data.total_balance || 0).toLocaleString('th-TH') + ' ฿';
                 document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
                 
                 if (document.getElementById('home-page').classList.contains('active')) {
@@ -336,6 +378,10 @@
                 return new Date(y2, m2-1, d2) - new Date(y1, m1-1, d1);
             });
 
+            const m = String(viewDate.getMonth() + 1).padStart(2, '0');
+            const y = String(viewDate.getFullYear()).slice(-2);
+            const monthStr = `${m}/${y}`;
+
             let html = '';
             sortedDates.forEach(date => {
                 const dayNum = parseInt(date.split('/')[0]);
@@ -358,8 +404,11 @@
                             return `
                             <div class="transaction-item">
                                 <div><div class="transaction-cat">${displayCat}</div><div class="transaction-sub">${displaySub}</div></div>
-                                <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
-                                    ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
+                                        ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
+                                    </div>
+                                    <button class="delete-btn" onclick="deleteRecord('${item.date}', ${item.amount}, '${item.category}', '${monthStr}')" title="ลบรายการ">🗑️</button>
                                 </div>
                             </div>`;
                         }).join('')}
@@ -380,30 +429,35 @@
             bills.forEach(b => {
                 if (b.status === 'ยังไม่จ่าย') {
                     totalUnpaid += b.amount;
-                    // 🌟 เพิ่ม onclick ให้การ์ดบิลค้างชำระ กดแล้วเด้งหน้าจ่ายเงินทันที
                     unpaidHtml += `
-                    <div class="form-box" onclick="payUnpaidBill('${b.category}', ${b.amount})" style="margin-bottom: 10px; cursor: pointer; justify-content: space-between; border-left: 4px solid #ef4444; transition: 0.2s;" onmouseover="this.style.background='#162e4d'" onmouseout="this.style.background='#11223A'">
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ef4444;">
+                        <div style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1;" onclick="payUnpaidBill('${b.category}', ${b.amount})">
                             <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
                             <div>
                                 <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (คลิกเพื่อชำระเงิน 👆)</div>
                                 <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
                             </div>
                         </div>
-                        <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
                     </div>`;
                 } else {
                     totalPaid += b.amount;
                     paidHtml += `
-                    <div class="form-box" style="margin-bottom: 10px; cursor: default; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
                             <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
                             <div>
                                 <div style="font-weight: 500; font-size:14px;">${b.category}</div>
                                 <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
                             </div>
                         </div>
-                        <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
                     </div>`;
                 }
             });
@@ -420,6 +474,7 @@
             document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
+        // 🌟 อัปเดตหน้าสรุป นำยอดเงินคงเหลือแต่ละบัญชีมาโชว์
         function renderSummary() {
             let expensesByCategory = {};
             let totalExp = 0;
@@ -494,7 +549,29 @@
                 }).join('');
             }
 
+            // 🌟 สร้าง HTML แสดงยอดคงเหลือแต่ละบัญชี
+            let accountBalancesHtml = `
+                <div class="insight-box" style="background: #0B192C; border: 1px solid #1e293b; padding-bottom: 5px;">
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 15px; color: white;">💰 ยอดเงินคงเหลือแต่ละบัญชี</div>
+            `;
+            let hasAccounts = false;
+            for (const [acc, bal] of Object.entries(currentAccountBalances)) {
+                hasAccounts = true;
+                let color = bal >= 0 ? '#22c55e' : '#ef4444';
+                accountBalancesHtml += `
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed #1e293b;">
+                        <span style="color: #cbd5e1;">${acc}</span>
+                        <span style="color: ${color}; font-weight: 600;">${bal.toLocaleString('th-TH')} ฿</span>
+                    </div>
+                `;
+            }
+            if (!hasAccounts) {
+                accountBalancesHtml += `<div class="empty-state" style="padding: 10px 0;">ยังไม่มีข้อมูลบัญชี</div>`;
+            }
+            accountBalancesHtml += `</div>`;
+
             document.getElementById('summary-content').innerHTML = `
+                ${accountBalancesHtml}
                 ${comparisonHtml}
                 <div class="insight-box" style="background: linear-gradient(135deg, #1e40af, #3b82f6); box-shadow: 0 4px 15px rgba(59,130,246,0.3);">
                     <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">💡 วิเคราะห์พฤติกรรม</div>
