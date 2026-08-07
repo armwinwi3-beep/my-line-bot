@@ -9,10 +9,25 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Thai', sans-serif; }
         body { background-color: #0B192C; color: white; height: 100vh; overflow: hidden; position: relative; }
         
-        .page { height: 100vh; display: none; flex-direction: column; }
-        .page.active { display: flex; }
+        /* 🌟 ปรับปรุง Animation การเปลี่ยนหน้าให้ Smooth แบบแอปมือถือ */
+        .page { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100vh; 
+            display: flex; flex-direction: column; background-color: #0B192C; 
+            z-index: 10; opacity: 0; pointer-events: none;
+            transform: translateX(30px); /* เลื่อนมาจากขวา */
+            transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+        }
+        .page.active { 
+            opacity: 1; pointer-events: auto; z-index: 20;
+            transform: translateX(0);
+        }
+        #home-page { transform: translateX(-30px); } /* หน้าแรกให้เอฟเฟกต์มาจากซ้าย */
+        #home-page.active { transform: translateX(0); }
         
-        /* 🌟 สไตล์กล่องแจ้งเตือนลอยๆ (Toast) */
+        /* หน้าฟอร์มให้เลื่อนขึ้นจากข้างล่าง */
+        #form-page { transform: translateY(50px); z-index: 30; background-color: #0B192C; }
+        #form-page.active { transform: translateY(0); }
+
         .toast {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: #22c55e; color: white; padding: 10px 20px; border-radius: 30px;
@@ -27,10 +42,11 @@
         
         .expense-summary { display: flex; justify-content: space-between; align-items: flex-start; }
         .expense-text { font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 2px; }
-        .expense-amount { font-size: 32px; font-weight: 700; line-height: 1.2; color: #0B192C; }
-        .expense-sub-amount { font-size: 22px; font-weight: 600; color: #ef4444; }
+        .expense-amount { font-size: 32px; font-weight: 700; line-height: 1.2; color: #0B192C; transition: 0.3s; }
+        .expense-sub-amount { font-size: 22px; font-weight: 600; color: #ef4444; transition: 0.3s; }
 
-        .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; margin-top: 10px; }
+        .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; margin-top: 10px; transition: 0.2s; }
+        .summary-btn:active { transform: scale(0.95); }
         
         .records-container { flex: 1; overflow-y: auto; padding-bottom: 90px; }
         .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
@@ -48,12 +64,14 @@
         .delete-btn:hover { color: #ef4444; }
 
         .fab-container { position: absolute; bottom: 80px; width: 100%; display: flex; justify-content: center; z-index: 50; }
-        .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; }
+        .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .fab-btn:active { transform: scale(0.95); }
         
-        .bottom-nav { background-color: white; height: 60px; display: flex; position: absolute; bottom: 0; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 40; }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 12px; cursor: pointer; }
+        .bottom-nav { background-color: white; height: 60px; display: flex; position: absolute; bottom: 0; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 40; transition: transform 0.3s ease; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 12px; cursor: pointer; transition: 0.2s; }
         .nav-item.active { color: #0066FF; font-weight: 600; }
-        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; }
+        .nav-item:active { transform: scale(0.9); }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; transition: 0.2s; }
 
         .top-bar { background-color: #FACC15; padding: 20px 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 24px; color: #1e293b; font-weight: bold; cursor: pointer; padding-bottom: 10px;}
@@ -69,23 +87,24 @@
         .amount-input::placeholder { color: #475569; }
         .currency { color: #475569; font-size: 30px; font-weight: 300; }
         
-        .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; }
+        .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; }
+        .form-box:active { opacity: 0.7; }
         .form-box input, .form-box select { background: transparent; border: none; outline: none; color: white; font-size: 16px; width: 100%; }
         .form-box select { color: #60a5fa; appearance: none; }
         .form-box select option, .form-box select optgroup { background-color: #0B192C; color: white; }
 
-        .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; }
+        .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; transition: 0.2s; }
+        .save-btn:active { transform: scale(0.98); }
 
         .insight-box { padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; }
         .cat-item { margin-bottom: 15px; }
         .cat-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
         .cat-bar-bg { background-color: #1e293b; height: 8px; border-radius: 4px; overflow: hidden; }
-        .cat-bar-fill { background-color: #FACC15; height: 100%; border-radius: 4px; }
+        .cat-bar-fill { background-color: #FACC15; height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.25, 0.8, 0.25, 1); }
     </style>
 </head>
 <body>
 
-    <!-- แถบแจ้งเตือนลอย -->
     <div id="toast" class="toast">กำลังประมวลผล...</div>
 
     <!-- 1. หน้าหลัก -->
@@ -244,14 +263,13 @@
         let currentTotalBalance = 0; 
         let simulatedIncome = 0;
 
-        // 🌟 ระบบ Toast Message แจ้งเตือนลอย
         function showToast(msg, isError = false) {
             let t = document.getElementById('toast');
-            t.style.background = isError ? '#ef4444' : '#f59e0b'; // สีส้มตอนกำลังโหลด
-            if(msg.includes('สำเร็จ')) t.style.background = '#22c55e'; // สีเขียวตอนเสร็จ
+            t.style.background = isError ? '#ef4444' : '#f59e0b'; 
+            if(msg.includes('สำเร็จ')) t.style.background = '#22c55e'; 
             t.innerText = msg;
             t.style.display = 'block';
-            setTimeout(() => { t.style.display = 'none'; }, 3000);
+            setTimeout(() => { t.style.display = 'none'; }, 2500);
         }
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
@@ -259,7 +277,7 @@
         function openHome(silent = false) {
             hideAllPages();
             document.getElementById('home-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'flex';
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
             document.getElementById('fab-button').style.display = 'flex';
             document.getElementById('nav-home').classList.add('active');
             document.getElementById('nav-bills').classList.remove('active');
@@ -269,7 +287,7 @@
         function openBills() {
             hideAllPages();
             document.getElementById('bills-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'flex';
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
             document.getElementById('fab-button').style.display = 'flex'; 
             document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-bills').classList.add('active');
@@ -279,7 +297,7 @@
         function openSummary() {
             hideAllPages();
             document.getElementById('summary-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'none'; 
+            document.getElementById('main-nav').style.transform = 'translateY(100%)'; 
             document.getElementById('fab-button').style.display = 'none';
             renderSummary();
         }
@@ -287,7 +305,7 @@
         function openForm() {
             hideAllPages();
             document.getElementById('form-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'none';
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
             document.getElementById('fab-button').style.display = 'none';
             switchTab('expense', document.querySelectorAll('.tab')[0]);
         }
@@ -295,7 +313,7 @@
         function openFormWithBill() {
             hideAllPages();
             document.getElementById('form-page').classList.add('active');
-            document.getElementById('main-nav').style.display = 'none';
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
             document.getElementById('fab-button').style.display = 'none';
             switchTab('bill', document.querySelectorAll('.tab')[3]); 
         }
@@ -342,7 +360,7 @@
                 }
             }).catch(e => { showToast('❌ ขาดการเชื่อมต่อ', true); });
 
-            // 🌟 หลอกตาลบออกจากหน้าจอไปก่อนทันที
+            // หลอกตาลบออกจากหน้าจอไปก่อนทันที
             currentRecords = currentRecords.filter(r => !(r.date === date && r.amount === amount && r.category === category));
             renderRecords(currentRecords);
         }
@@ -366,36 +384,52 @@
             updateDateDisplay();
         }
 
-        // 🌟 เพิ่ม silent mode เพื่อซ่อนการโหลดเมื่อแอบทำงานเบื้องหลัง
+        // 🌟 ดึงข้อมูลและใช้ Cache (Stale-while-revalidate) ให้โหลดเสร็จในเสี้ยววินาที
         async function fetchMonthData(silent = false) {
-            if(!silent) {
-                document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
-            }
-            
             const m = String(viewDate.getMonth() + 1).padStart(2, '0');
             const y = String(viewDate.getFullYear()).slice(-2);
             const monthStr = `${m}/${y}`; 
+            const cacheKey = 'moneybase_data_' + monthStr;
 
+            // ดึง Cache มาโชว์ก่อนทันที
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                try {
+                    const data = JSON.parse(cachedData);
+                    updateUIWithData(data, monthStr);
+                } catch(e){}
+            } else if (!silent) {
+                document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
+            }
+
+            // ดึงของจริงจากหลังบ้าน (Background Sync)
             try {
                 const response = await fetch(`/api/data?month=${monthStr}`);
                 const data = await response.json();
                 
-                currentRecords = data.records || []; 
-                currentAccountBalances = data.account_balances || {};
-                currentTotalBalance = data.total_balance || 0; 
-                
-                document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
-                document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
-                
-                if (document.getElementById('home-page').classList.contains('active')) {
-                    renderRecords(currentRecords);
-                } else if (document.getElementById('bills-page').classList.contains('active')) {
-                    renderBills();
-                } else if (document.getElementById('summary-page').classList.contains('active')) {
-                    renderSummary();
-                }
+                localStorage.setItem(cacheKey, JSON.stringify(data)); // อัปเดต Cache
+                updateUIWithData(data, monthStr); // รีเฟรชหน้าจอใหม่ด้วยข้อมูลจริง
             } catch (error) {
-                if(!silent) document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+                if(!cachedData && !silent) {
+                    document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+                }
+            }
+        }
+
+        function updateUIWithData(data, monthStr) {
+            currentRecords = data.records || []; 
+            currentAccountBalances = data.account_balances || {};
+            currentTotalBalance = data.total_balance || 0; 
+            
+            document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
+            document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
+            
+            if (document.getElementById('home-page').classList.contains('active')) {
+                renderRecords(currentRecords);
+            } else if (document.getElementById('bills-page').classList.contains('active')) {
+                renderBills();
+            } else if (document.getElementById('summary-page').classList.contains('active')) {
+                renderSummary();
             }
         }
 
@@ -604,7 +638,7 @@
                             <span style="color: #22c55e; font-weight: 600;">+${totalInc.toLocaleString('th-TH')} ฿</span>
                         </div>
                         <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="background-color: #22c55e; height: 100%; border-radius: 5px; width: ${incWidth}%; transition: width 0.5s;"></div>
+                            <div style="background-color: #22c55e; height: 100%; border-radius: 5px; width: ${incWidth}%; transition: width 0.8s ease-out;"></div>
                         </div>
                     </div>
 
@@ -614,7 +648,7 @@
                             <span style="color: #ef4444; font-weight: 600;">-${totalExp.toLocaleString('th-TH')} ฿</span>
                         </div>
                         <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
-                            <div style="background-color: #ef4444; height: 100%; border-radius: 5px; width: ${expWidth}%; transition: width 0.5s;"></div>
+                            <div style="background-color: #ef4444; height: 100%; border-radius: 5px; width: ${expWidth}%; transition: width 0.8s ease-out;"></div>
                         </div>
                     </div>
                     
@@ -701,6 +735,16 @@
                 <h3 style="font-size:16px; margin-bottom:15px; color:#94a3b8;">หมวดหมู่ยอดฮิต</h3>
                 <div>${barsHtml}</div>
             `;
+            
+            // Trigger animation
+            setTimeout(() => {
+                const bars = document.querySelectorAll('.cat-bar-fill');
+                bars.forEach(bar => {
+                    const w = bar.style.width;
+                    bar.style.width = '0%';
+                    setTimeout(() => { bar.style.width = w; }, 50);
+                });
+            }, 100);
         }
 
         updateDateDisplay();
@@ -833,15 +877,15 @@
             document.getElementById('account').value = '';
             document.getElementById('note').value = '';
 
-            // ส่งคำสั่งเซฟลง Google Sheets
+            // ส่งคำสั่งเซฟลง Google Sheets แบบเบื้องหลัง
             fetch('/api/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             }).then(res => res.json()).then(result => {
                 if(result.status === 'success') {
-                    showToast("✅ บันทึกและซิงค์ข้อมูลสำเร็จ");
-                    fetchMonthData(true); // โหลดข้อมูลจริงๆ มาทับแบบเงียบๆ
+                    showToast("✅ บันทึกและอัปเดตข้อมูลสำเร็จ");
+                    fetchMonthData(true); 
                 } else {
                     showToast('❌ ' + result.message, true);
                 }
