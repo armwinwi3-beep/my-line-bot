@@ -232,6 +232,9 @@
         let currentRecords = [];
         let currentAccountBalances = {};
         let currentTotalBalance = 0; 
+        
+        // 🌟 ตัวแปรเก็บรายรับจำลอง
+        let simulatedIncome = 0;
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
 
@@ -285,6 +288,20 @@
             document.getElementById('category').value = categoryName;
             document.getElementById('billStatus').value = 'จ่ายแล้ว';
             toggleBillAccountBox();
+        }
+
+        // 🌟 ฟังก์ชันจัดการโหมดจำลอง
+        function applySimulation() {
+            const val = parseFloat(document.getElementById('demo-income-input').value);
+            if(!isNaN(val) && val >= 0) {
+                simulatedIncome = val;
+                renderBills(); 
+            }
+        }
+
+        function clearSimulation() {
+            simulatedIncome = 0;
+            renderBills();
         }
 
         async function deleteRecord(date, amount, category, sheetName) {
@@ -463,21 +480,35 @@
 
             document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
             
-            let finalHtml = '';
+            // 🌟 กล่อง UI สำหรับโหมดจำลอง (แทรกไว้บนสุดของ list)
+            let demoHtml = `
+            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลอง (Demo)</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">กรอกรายรับที่คาดว่าจะได้ในอนาคต เพื่อเช็คว่าเงินจะพอจ่ายบิลไหม</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="demo-income-input" placeholder="รายรับล่วงหน้า..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
+                    <button onclick="applySimulation()" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
+                </div>
+            </div>`;
+
+            let finalHtml = demoHtml;
             
             if (totalUnpaid > 0) {
                 let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
                 let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
                 let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
 
-                let remainingToSave = totalUnpaid - currentTotalBalance;
+                // 🌟 คำนวณโดยนำเงินจำลองมารวมกับเงินปัจจุบัน
+                let effectiveBalance = currentTotalBalance + simulatedIncome;
+                let remainingToSave = totalUnpaid - effectiveBalance;
                 
                 let saveHtml = '';
                 if (remainingToSave <= 0) {
                     saveHtml = `
                     <div style="background: rgba(34, 197, 94, 0.1); border: 1px dashed #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
                         <div style="font-size: 12px; color: #86efac; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือพอจ่ายบิลทั้งหมดแล้วครับ!</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือ${simulatedIncome > 0 ? ' (รวมเงินจำลอง)' : ''} พอจ่ายบิลทั้งหมดแล้วครับ!</div>
                     </div>`;
                 } else {
                     let dailySave = remainingToSave / Math.max(1, remainingDays);
@@ -485,6 +516,7 @@
                     <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
                         <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงิน (ขาดเงินอีก ${remainingToSave.toLocaleString('th-TH')} ฿ • เหลือ ${remainingDays} วัน)</div>
                         <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินเพิ่มวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        ${simulatedIncome > 0 ? `<div style="margin-top: 5px; font-size: 11px; color: #fbbf24;">* กำลังคำนวณโดยรวมเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
                     </div>`;
                 }
 
@@ -503,7 +535,7 @@
             let expensesByCategory = {};
             let totalExp = 0;
             let totalInc = 0;
-            let totalGeneralExp = 0; // 🌟 เก็บยอดที่ไม่ได้เป็นบิล เพื่อหารรายวัน
+            let totalGeneralExp = 0; 
 
             currentRecords.forEach(r => {
                 if(r.status === 'ยังไม่จ่าย') return; 
@@ -513,7 +545,6 @@
                     expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
                     totalExp += r.amount;
                     
-                    // 🌟 ถ้าเป็นรายจ่ายทั่วไป (ไม่ใช่บิล) ให้บวกเข้า totalGeneralExp
                     if (r.type === 'รายจ่าย') {
                         totalGeneralExp += r.amount;
                     }
@@ -534,7 +565,6 @@
             let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
             let daysDivisor = isCurrentMonth ? currentDate.getDate() : daysInMonthSummary;
             
-            // 🌟 คำนวณเฉลี่ย 2 แบบ
             let avgDailyExpTotal = totalExp / Math.max(1, daysDivisor);
             let avgDailyExpGeneral = totalGeneralExp / Math.max(1, daysDivisor);
 
@@ -562,7 +592,6 @@
                         </div>
                     </div>
                     
-                    <!-- 🌟 กล่องแยกยอดเฉลี่ยรายวัน -->
                     <div style="background-color: #1e293b; padding: 12px; border-radius: 8px; margin-top: 18px; display: flex; justify-content: space-between; align-items: center; text-align: center;">
                         <div style="flex: 1;">
                             <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">เฉลี่ยรวม (หาร ${daysDivisor} วัน)</div>
