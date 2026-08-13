@@ -149,7 +149,7 @@
         <div class="records-container" id="records-container"></div>
     </div>
 
-    <!-- 🌟 2. หน้าปฏิทินออมเงิน (ใหม่) -->
+    <!-- 2. หน้าปฏิทินออมเงิน -->
     <div id="calendar-page" class="page">
         <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
             <div style="font-size:18px; font-weight:bold; color:#1e293b;">📅 ปฏิทินออมเงิน</div>
@@ -264,7 +264,6 @@
         </button>
     </div>
     
-    <!-- 🌟 เพิ่มเมนู ปฏิทิน เข้าไปตรงกลาง -->
     <div class="bottom-nav" id="main-nav">
         <div class="nav-item active" id="nav-home" onclick="openHome()">
             <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -371,17 +370,21 @@
             toggleBillAccountBox();
         }
 
-        function applySimulation() {
-            const val = parseFloat(document.getElementById('demo-income-input').value);
+        // 🌟 แก้ไขฟังก์ชันรับพารามิเตอร์เพื่อให้รู้ว่ากดมาจากหน้าไหน
+        function applySimulation(source) {
+            let inputId = source === 'calendar' ? 'demo-income-input-cal' : 'demo-income-input';
+            const val = parseFloat(document.getElementById(inputId).value);
             if(!isNaN(val) && val >= 0) {
                 simulatedIncome = val;
-                renderBills(); 
+                if (document.getElementById('bills-page').classList.contains('active')) renderBills(); 
+                if (document.getElementById('calendar-page').classList.contains('active')) renderCalendar(); 
             }
         }
 
         function clearSimulation() {
             simulatedIncome = 0;
-            renderBills();
+            if (document.getElementById('bills-page').classList.contains('active')) renderBills(); 
+            if (document.getElementById('calendar-page').classList.contains('active')) renderCalendar(); 
         }
 
         async function deleteRecord(date, amount, category, sheetName) {
@@ -538,6 +541,152 @@
             container.innerHTML = html;
         }
 
+        // 🌟 หน้าปฏิทินที่เพิ่มเข้ามาใหม่
+        function renderCalendar() {
+            let content = document.getElementById('calendar-content');
+            
+            let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+            let upToDay = isCurrentMonth ? currentDate.getDate() : daysInMonth;
+
+            // หายอดบิลที่ยังไม่ได้จ่าย
+            let totalUnpaid = 0;
+            currentRecords.forEach(r => {
+                if (r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status === 'ยังไม่จ่าย') {
+                    totalUnpaid += r.amount;
+                }
+            });
+
+            // คำนวณเงินที่ขาด
+            let currentGapReal = totalUnpaid - currentTotalBalance;
+
+            // หาเงินที่เก็บได้ในแต่ละวันที่ผ่านมา (รายรับ - รายจ่าย)
+            let dailyS = new Array(upToDay + 1).fill(0);
+            currentRecords.forEach(r => {
+                if (r.status === 'ยังไม่จ่าย') return;
+                let parts = r.date.split('/');
+                let day = parseInt(parts[0]);
+                if (day >= 1 && day <= upToDay) {
+                    if (r.type === 'รายรับ') dailyS[day] += r.amount;
+                    else if (r.type === 'รายจ่าย') dailyS[day] -= r.amount;
+                }
+            });
+
+            // หายอดเงินขาดทุนสะสมเริ่มต้นของเดือน (ย้อนกลับ)
+            let sumS = 0;
+            for (let i = 1; i <= upToDay; i++) { sumS += dailyS[i]; }
+            
+            let startGap = currentGapReal + sumS;
+            if (startGap < 0) startGap = 0;
+
+            let calendarData = [];
+            let currentRunningGap = startGap;
+
+            for (let i = 1; i <= upToDay; i++) {
+                let remainingDaysAtStartOfDay = daysInMonth - i + 1;
+                let targetForDay = currentRunningGap > 0 ? currentRunningGap / remainingDaysAtStartOfDay : 0;
+                
+                let actualS = dailyS[i];
+                let newGap = currentRunningGap - actualS;
+                if (newGap < 0) newGap = 0;
+                
+                let effectiveNewGap = newGap;
+                // 🌟 แทรกโหมดจำลอง (หลอกว่าวันนี้ได้เงินเพิ่ม เป้าหมายถัดไปจะลดลง)
+                if (i === upToDay) {
+                    effectiveNewGap -= simulatedIncome;
+                    if (effectiveNewGap < 0) effectiveNewGap = 0;
+                }
+                
+                let nextRemainingDays = daysInMonth - i;
+                let nextTarget = (effectiveNewGap > 0 && nextRemainingDays > 0) ? effectiveNewGap / nextRemainingDays : 0;
+                
+                let diff = actualS - targetForDay;
+                
+                calendarData.push({
+                    day: i,
+                    target: targetForDay,
+                    actual: actualS,
+                    diff: diff,
+                    nextTarget: nextTarget,
+                    isPast: i < upToDay,
+                    isToday: i === upToDay
+                });
+                
+                currentRunningGap = newGap;
+            }
+
+            let displayGap = currentGapReal - simulatedIncome;
+            if (displayGap < 0) displayGap = 0;
+
+            let nextTargetTommorow = displayGap > 0 ? displayGap / Math.max(1, daysInMonth - upToDay) : 0;
+            if (daysInMonth - upToDay <= 0) nextTargetTommorow = 0; 
+
+            // 🌟 กล่องโหมดจำลอง
+            let demoHtml = `
+            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลองรายรับล่วงหน้า</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="demo-income-input-cal" placeholder="จำลองรายรับ..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
+                    <button onclick="applySimulation('calendar')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
+                </div>
+                ${simulatedIncome > 0 ? `<div style="font-size: 11px; color: #fbbf24; margin-top: 10px;">* คำนวณเป้าหมายถัดไปโดยหักลบเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
+            </div>`;
+
+            let summaryHtml = `
+                <div class="insight-box" style="background: linear-gradient(135deg, #0284c7, #2563eb); box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);">
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 5px; color: #e0f2fe;">🎯 สถานะเป้าหมายปัจจุบัน</div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+                        <div>
+                            <div style="font-size: 12px; color: #bae6fd;">ยอดเงินที่ยังขาด${simulatedIncome > 0 ? ' (หลังจำลอง)' : ''}</div>
+                            <div style="font-size: 24px; font-weight: 700;">${displayGap > 0 ? displayGap.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0'} ฿</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 12px; color: #bae6fd;">เป้าหมายที่ต้องเก็บ${isCurrentMonth ? 'พรุ่งนี้' : 'ต่อวัน'}</div>
+                            <div style="font-size: 18px; font-weight: 700; color: #fde047;">${displayGap > 0 ? nextTargetTommorow.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0'} ฿/วัน</div>
+                        </div>
+                    </div>
+                    ${displayGap <= 0 ? '<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">🎉 ยินดีด้วย! คุณมีเงินพอจ่ายบิลทั้งหมดแล้ว</div>' : `<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">เหลือเวลาอีก ${daysInMonth - upToDay} วัน ในเดือนนี้</div>`}
+                </div>
+                <div style="font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #cbd5e1;">ประวัติการเก็บเงินรายวัน (เดือนนี้)</div>
+            `;
+
+            let listHtml = '';
+            
+            calendarData.reverse().forEach(d => {
+                let statusColor = d.diff >= 0 ? '#22c55e' : '#ef4444';
+                let statusIcon = d.diff >= 0 ? '🟢 ทะลุเป้า' : '🔴 พลาดเป้า';
+                let diffAbs = Math.abs(d.diff).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                let diffText = d.target > 0 ? `${statusIcon} (${d.diff >= 0 ? '+' : '-'}${diffAbs})` : 'เป้าหมายสำเร็จแล้ว';
+                
+                if (d.target === 0 && d.actual === 0 && d.diff === 0) {
+                     statusColor = '#94a3b8';
+                     diffText = '-';
+                }
+
+                listHtml += `
+                <div style="background: #11223A; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid ${statusColor};">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 8px;">
+                        <div style="font-weight: bold; color: ${d.isToday && isCurrentMonth ? '#facc15' : 'white'};">${d.isToday && isCurrentMonth ? 'วันนี้' : `วันที่ ${d.day}`}</div>
+                        <div style="font-size: 12px; color: #94a3b8;">เป้า: ${d.target.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <div style="font-size: 13px; color: #cbd5e1;">เก็บได้จริง:</div>
+                        <div style="font-size: 18px; font-weight: bold; color: ${d.actual >= 0 ? '#22c55e' : '#ef4444'};">${d.actual > 0 ? '+' : ''}${d.actual.toLocaleString('th-TH')} ฿</div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                        <div style="color: ${statusColor};">${diffText}</div>
+                        ${d.isPast && currentGapReal > 0 ? `<div style="color: #64748b;">เป้าถัดไปปรับเป็น ${d.nextTarget.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ฿</div>` : ''}
+                        ${d.isToday && isCurrentMonth && displayGap > 0 ? `<div style="color: #facc15;">เป้าพรุ่งนี้ ${d.nextTarget.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ฿</div>` : ''}
+                    </div>
+                </div>`;
+            });
+
+            content.innerHTML = demoHtml + summaryHtml + listHtml;
+        }
+
         function renderBills() {
             let totalPaid = 0;
             let totalUnpaid = 0;
@@ -590,7 +739,7 @@
                 <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">กรอกรายรับที่คาดว่าจะได้ในอนาคต เพื่อเช็คว่าเงินจะพอจ่ายบิลไหม</div>
                 <div style="display: flex; gap: 10px;">
                     <input type="number" id="demo-income-input" placeholder="รายรับล่วงหน้า..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
-                    <button onclick="applySimulation()" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    <button onclick="applySimulation('bills')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
                     ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
                 </div>
             </div>`;
@@ -631,135 +780,6 @@
             else finalHtml += paidHtml;
 
             document.getElementById('bills-list').innerHTML = finalHtml;
-        }
-
-        // 🌟 ฟังก์ชันเรนเดอร์หน้าปฏิทินรายวัน
-        function renderCalendar() {
-            let content = document.getElementById('calendar-content');
-            
-            let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-            let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
-            let upToDay = isCurrentMonth ? currentDate.getDate() : daysInMonth;
-
-            // หายอดบิลคงค้างทั้งหมดเพื่อตั้งเป้าหมาย
-            let totalUnpaid = 0;
-            currentRecords.forEach(r => {
-                if (r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status === 'ยังไม่จ่าย') {
-                    totalUnpaid += r.amount;
-                }
-            });
-
-            let currentGap = totalUnpaid - currentTotalBalance;
-            if (currentGap < 0) currentGap = 0;
-
-            // เก็บประวัติเงินที่เก็บได้แต่ละวัน (รายรับ - รายจ่ายทั่วไป)
-            let dailyS = new Array(upToDay + 1).fill(0);
-            
-            currentRecords.forEach(r => {
-                if (r.status === 'ยังไม่จ่าย') return;
-                
-                let parts = r.date.split('/');
-                let day = parseInt(parts[0]);
-                
-                if (day >= 1 && day <= upToDay) {
-                    if (r.type === 'รายรับ') {
-                        dailyS[day] += r.amount;
-                    } else if (r.type === 'รายจ่าย') { 
-                        dailyS[day] -= r.amount;
-                    }
-                }
-            });
-
-            // คำนวณย้อนกลับเพื่อหาเป้าหมาย ณ วันแรกของเดือน
-            let sumS = 0;
-            for (let i = 1; i <= upToDay; i++) {
-                sumS += dailyS[i];
-            }
-            
-            let startGap = currentGap + sumS;
-            let calendarData = [];
-            let currentRunningGap = startGap;
-
-            for (let i = 1; i <= upToDay; i++) {
-                let remainingDaysAtStartOfDay = daysInMonth - i + 1;
-                let targetForDay = currentRunningGap > 0 ? currentRunningGap / remainingDaysAtStartOfDay : 0;
-                
-                let actualS = dailyS[i];
-                let newGap = currentRunningGap - actualS;
-                if (newGap < 0) newGap = 0;
-                
-                let nextRemainingDays = daysInMonth - i;
-                let nextTarget = (newGap > 0 && nextRemainingDays > 0) ? newGap / nextRemainingDays : 0;
-                
-                let diff = actualS - targetForDay;
-                
-                calendarData.push({
-                    day: i,
-                    target: targetForDay,
-                    actual: actualS,
-                    diff: diff,
-                    nextTarget: nextTarget,
-                    isPast: i < upToDay,
-                    isToday: i === upToDay
-                });
-                
-                currentRunningGap = newGap;
-            }
-
-            let nextTargetTommorow = currentRunningGap > 0 ? currentRunningGap / (daysInMonth - upToDay) : 0;
-            if (daysInMonth - upToDay <= 0) nextTargetTommorow = 0; 
-
-            let summaryHtml = `
-                <div class="insight-box" style="background: linear-gradient(135deg, #0284c7, #2563eb); box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);">
-                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 5px; color: #e0f2fe;">🎯 สถานะเป้าหมายปัจจุบัน</div>
-                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
-                        <div>
-                            <div style="font-size: 12px; color: #bae6fd;">ยอดเงินที่ยังขาด</div>
-                            <div style="font-size: 24px; font-weight: 700;">${currentGap > 0 ? currentGap.toLocaleString('th-TH') : '0'} ฿</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 12px; color: #bae6fd;">เป้าหมายที่ต้องเก็บ${isCurrentMonth ? 'พรุ่งนี้' : 'ต่อวัน'}</div>
-                            <div style="font-size: 18px; font-weight: 700; color: #fde047;">${currentGap > 0 ? nextTargetTommorow.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0'} ฿/วัน</div>
-                        </div>
-                    </div>
-                    ${currentGap <= 0 ? '<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">🎉 ยินดีด้วย! คุณมีเงินพอจ่ายบิลทั้งหมดแล้ว</div>' : `<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">เหลือเวลาอีก ${daysInMonth - upToDay} วัน ในเดือนนี้</div>`}
-                </div>
-                <div style="font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #cbd5e1;">ประวัติการเก็บเงินรายวัน (เดือนนี้)</div>
-            `;
-
-            let listHtml = '';
-            
-            calendarData.reverse().forEach(d => {
-                let statusColor = d.diff >= 0 ? '#22c55e' : '#ef4444';
-                let statusIcon = d.diff >= 0 ? '🟢 ทะลุเป้า' : '🔴 พลาดเป้า';
-                let diffAbs = Math.abs(d.diff).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                let diffText = d.target > 0 ? `${statusIcon} (${d.diff >= 0 ? '+' : '-'}${diffAbs})` : 'เป้าหมายสำเร็จแล้ว';
-                
-                if (d.target === 0 && d.actual === 0 && d.diff === 0) {
-                     statusColor = '#94a3b8';
-                     diffText = '-';
-                }
-
-                listHtml += `
-                <div style="background: #11223A; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid ${statusColor};">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 8px;">
-                        <div style="font-weight: bold; color: ${d.isToday && isCurrentMonth ? '#facc15' : 'white'};">${d.isToday && isCurrentMonth ? 'วันนี้' : `วันที่ ${d.day}`}</div>
-                        <div style="font-size: 12px; color: #94a3b8;">เป้า: ${d.target.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <div style="font-size: 13px; color: #cbd5e1;">เก็บได้จริง:</div>
-                        <div style="font-size: 18px; font-weight: bold; color: ${d.actual >= 0 ? '#22c55e' : '#ef4444'};">${d.actual > 0 ? '+' : ''}${d.actual.toLocaleString('th-TH')} ฿</div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
-                        <div style="color: ${statusColor};">${diffText}</div>
-                        ${d.isPast && currentGap > 0 ? `<div style="color: #64748b;">เป้าถัดไปปรับเป็น ${d.nextTarget.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ฿</div>` : ''}
-                    </div>
-                </div>`;
-            });
-
-            content.innerHTML = summaryHtml + listHtml;
         }
 
         function renderSummary() {
