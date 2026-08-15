@@ -519,18 +519,17 @@
                         ${g.items.slice().reverse().map(item => { 
                             let displayCat = item.category;
                             
-                            // 🌟 จัดรูปแบบการแสดงเวลาบัญชีและโน้ต
-                            let timeText = item.time ? item.time.substring(0, 5) + ' น.' : '';
+                            // 🌟 ตรวจสอบและดึงเวลามาแสดงผลอย่างถูกต้อง
+                            let timeText = item.time ? '• ' + item.time.substring(0, 5) + ' น.' : '';
                             let subParts = [];
                             if (item.account !== '-') subParts.push(item.account);
                             if (item.note !== '-') subParts.push(`(${item.note})`);
-                            if (timeText) subParts.push(`• ${timeText}`);
+                            if (timeText) subParts.push(timeText);
                             let displaySub = subParts.join(' ');
 
                             if (item.type === 'ย้ายเงิน') {
                                 displayCat = '🔄 ย้ายเงิน';
-                                let tText = item.time ? '• ' + item.time.substring(0, 5) + ' น.' : '';
-                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''} ${tText}`;
+                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''} ${timeText}`;
                             }
                             return `
                             <div class="transaction-item">
