@@ -370,7 +370,6 @@
             toggleBillAccountBox();
         }
 
-        // 🌟 แก้ไขฟังก์ชันรับพารามิเตอร์เพื่อให้รู้ว่ากดมาจากหน้าไหน
         function applySimulation(source) {
             let inputId = source === 'calendar' ? 'demo-income-input-cal' : 'demo-income-input';
             const val = parseFloat(document.getElementById(inputId).value);
@@ -519,10 +518,19 @@
                         </div>
                         ${g.items.slice().reverse().map(item => { 
                             let displayCat = item.category;
-                            let displaySub = `${item.account !== '-' ? item.account : ''} ${item.note !== '-' ? `(${item.note})` : ''}`.trim();
+                            
+                            // 🌟 จัดรูปแบบการแสดงเวลาบัญชีและโน้ต
+                            let timeText = item.time ? item.time.substring(0, 5) + ' น.' : '';
+                            let subParts = [];
+                            if (item.account !== '-') subParts.push(item.account);
+                            if (item.note !== '-') subParts.push(`(${item.note})`);
+                            if (timeText) subParts.push(`• ${timeText}`);
+                            let displaySub = subParts.join(' ');
+
                             if (item.type === 'ย้ายเงิน') {
                                 displayCat = '🔄 ย้ายเงิน';
-                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''}`;
+                                let tText = item.time ? '• ' + item.time.substring(0, 5) + ' น.' : '';
+                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''} ${tText}`;
                             }
                             return `
                             <div class="transaction-item">
@@ -541,7 +549,102 @@
             container.innerHTML = html;
         }
 
-        // 🌟 หน้าปฏิทินที่เพิ่มเข้ามาใหม่
+        function renderBills() {
+            let totalPaid = 0;
+            let totalUnpaid = 0;
+            let paidHtml = '';
+            let unpaidHtml = '';
+
+            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
+
+            bills.forEach(b => {
+                let timeText = b.time ? '• ' + b.time.substring(0, 5) + ' น.' : '';
+                if (b.status === 'ยังไม่จ่าย') {
+                    totalUnpaid += b.amount;
+                    unpaidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ef4444;">
+                        <div style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1;" onclick="payUnpaidBill('${b.category}', ${b.amount})">
+                            <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (คลิกเพื่อชำระเงิน 👆)</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${timeText} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
+                    </div>`;
+                } else {
+                    totalPaid += b.amount;
+                    paidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                            <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px;">${b.category}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${timeText} • ${b.account}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
+            
+            let demoHtml = `
+            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลอง (Demo)</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">กรอกรายรับที่คาดว่าจะได้ในอนาคต เพื่อเช็คว่าเงินจะพอจ่ายบิลไหม</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="demo-income-input" placeholder="รายรับล่วงหน้า..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
+                    <button onclick="applySimulation('bills')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
+                </div>
+            </div>`;
+
+            let finalHtml = demoHtml;
+            
+            if (totalUnpaid > 0) {
+                let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+                let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+                let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
+
+                let effectiveBalance = currentTotalBalance + simulatedIncome;
+                let remainingToSave = totalUnpaid - effectiveBalance;
+                
+                let saveHtml = '';
+                if (remainingToSave <= 0) {
+                    saveHtml = `
+                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px dashed #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #86efac; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือ${simulatedIncome > 0 ? ' (รวมเงินจำลอง)' : ''} พอจ่ายบิลทั้งหมดแล้วครับ!</div>
+                    </div>`;
+                } else {
+                    let dailySave = remainingToSave / Math.max(1, remainingDays);
+                    saveHtml = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงิน (ขาดเงินอีก ${remainingToSave.toLocaleString('th-TH')} ฿ • เหลือ ${remainingDays} วัน)</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินเพิ่มวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        ${simulatedIncome > 0 ? `<div style="margin-top: 5px; font-size: 11px; color: #fbbf24;">* กำลังคำนวณโดยรวมเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
+                    </div>`;
+                }
+
+                finalHtml += saveHtml;
+                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
+            }
+            
+            finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
+            if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
+            else finalHtml += paidHtml;
+
+            document.getElementById('bills-list').innerHTML = finalHtml;
+        }
+
         function renderCalendar() {
             let content = document.getElementById('calendar-content');
             
@@ -549,7 +652,6 @@
             let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
             let upToDay = isCurrentMonth ? currentDate.getDate() : daysInMonth;
 
-            // หายอดบิลที่ยังไม่ได้จ่าย
             let totalUnpaid = 0;
             currentRecords.forEach(r => {
                 if (r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status === 'ยังไม่จ่าย') {
@@ -557,10 +659,8 @@
                 }
             });
 
-            // คำนวณเงินที่ขาด
             let currentGapReal = totalUnpaid - currentTotalBalance;
 
-            // หาเงินที่เก็บได้ในแต่ละวันที่ผ่านมา (รายรับ - รายจ่าย)
             let dailyS = new Array(upToDay + 1).fill(0);
             currentRecords.forEach(r => {
                 if (r.status === 'ยังไม่จ่าย') return;
@@ -572,7 +672,6 @@
                 }
             });
 
-            // หายอดเงินขาดทุนสะสมเริ่มต้นของเดือน (ย้อนกลับ)
             let sumS = 0;
             for (let i = 1; i <= upToDay; i++) { sumS += dailyS[i]; }
             
@@ -591,7 +690,6 @@
                 if (newGap < 0) newGap = 0;
                 
                 let effectiveNewGap = newGap;
-                // 🌟 แทรกโหมดจำลอง (หลอกว่าวันนี้ได้เงินเพิ่ม เป้าหมายถัดไปจะลดลง)
                 if (i === upToDay) {
                     effectiveNewGap -= simulatedIncome;
                     if (effectiveNewGap < 0) effectiveNewGap = 0;
@@ -621,7 +719,6 @@
             let nextTargetTommorow = displayGap > 0 ? displayGap / Math.max(1, daysInMonth - upToDay) : 0;
             if (daysInMonth - upToDay <= 0) nextTargetTommorow = 0; 
 
-            // 🌟 กล่องโหมดจำลอง
             let demoHtml = `
             <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
                 <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลองรายรับล่วงหน้า</div>
@@ -685,101 +782,6 @@
             });
 
             content.innerHTML = demoHtml + summaryHtml + listHtml;
-        }
-
-        function renderBills() {
-            let totalPaid = 0;
-            let totalUnpaid = 0;
-            let paidHtml = '';
-            let unpaidHtml = '';
-
-            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
-
-            bills.forEach(b => {
-                if (b.status === 'ยังไม่จ่าย') {
-                    totalUnpaid += b.amount;
-                    unpaidHtml += `
-                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ef4444;">
-                        <div style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1;" onclick="payUnpaidBill('${b.category}', ${b.amount})">
-                            <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
-                            <div>
-                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (คลิกเพื่อชำระเงิน 👆)</div>
-                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
-                            </div>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
-                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
-                        </div>
-                    </div>`;
-                } else {
-                    totalPaid += b.amount;
-                    paidHtml += `
-                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                            <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
-                            <div>
-                                <div style="font-weight: 500; font-size:14px;">${b.category}</div>
-                                <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
-                            </div>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
-                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
-                        </div>
-                    </div>`;
-                }
-            });
-
-            document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
-            
-            let demoHtml = `
-            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลอง (Demo)</div>
-                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">กรอกรายรับที่คาดว่าจะได้ในอนาคต เพื่อเช็คว่าเงินจะพอจ่ายบิลไหม</div>
-                <div style="display: flex; gap: 10px;">
-                    <input type="number" id="demo-income-input" placeholder="รายรับล่วงหน้า..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
-                    <button onclick="applySimulation('bills')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
-                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
-                </div>
-            </div>`;
-
-            let finalHtml = demoHtml;
-            
-            if (totalUnpaid > 0) {
-                let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-                let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
-                let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
-
-                let effectiveBalance = currentTotalBalance + simulatedIncome;
-                let remainingToSave = totalUnpaid - effectiveBalance;
-                
-                let saveHtml = '';
-                if (remainingToSave <= 0) {
-                    saveHtml = `
-                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px dashed #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                        <div style="font-size: 12px; color: #86efac; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือ${simulatedIncome > 0 ? ' (รวมเงินจำลอง)' : ''} พอจ่ายบิลทั้งหมดแล้วครับ!</div>
-                    </div>`;
-                } else {
-                    let dailySave = remainingToSave / Math.max(1, remainingDays);
-                    saveHtml = `
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงิน (ขาดเงินอีก ${remainingToSave.toLocaleString('th-TH')} ฿ • เหลือ ${remainingDays} วัน)</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินเพิ่มวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
-                        ${simulatedIncome > 0 ? `<div style="margin-top: 5px; font-size: 11px; color: #fbbf24;">* กำลังคำนวณโดยรวมเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
-                    </div>`;
-                }
-
-                finalHtml += saveHtml;
-                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
-            }
-            
-            finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
-            if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
-            else finalHtml += paidHtml;
-
-            document.getElementById('bills-list').innerHTML = finalHtml;
         }
 
         function renderSummary() {
