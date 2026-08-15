@@ -517,19 +517,18 @@
                             ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
                         </div>
                         ${g.items.slice().reverse().map(item => { 
-                            let displayCat = item.category;
+                            // 🌟 ย้ายเวลามาต่อท้ายชื่อหมวดหมู่ (Transaction-Cat)
+                            let timeText = item.time ? ` (${item.time.substring(0, 5)} น.)` : '';
+                            let displayCat = item.category + timeText;
                             
-                            // 🌟 ตรวจสอบและดึงเวลามาแสดงผลอย่างถูกต้อง
-                            let timeText = item.time ? '• ' + item.time.substring(0, 5) + ' น.' : '';
                             let subParts = [];
                             if (item.account !== '-') subParts.push(item.account);
                             if (item.note !== '-') subParts.push(`(${item.note})`);
-                            if (timeText) subParts.push(timeText);
                             let displaySub = subParts.join(' ');
 
                             if (item.type === 'ย้ายเงิน') {
-                                displayCat = '🔄 ย้ายเงิน';
-                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''} ${timeText}`;
+                                displayCat = '🔄 ย้ายเงิน' + timeText;
+                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''}`;
                             }
                             return `
                             <div class="transaction-item">
@@ -557,7 +556,9 @@
             const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
 
             bills.forEach(b => {
-                let timeText = b.time ? '• ' + b.time.substring(0, 5) + ' น.' : '';
+                let timeText = b.time ? ` (${b.time.substring(0, 5)} น.)` : '';
+                let catWithTime = b.category + timeText;
+
                 if (b.status === 'ยังไม่จ่าย') {
                     totalUnpaid += b.amount;
                     unpaidHtml += `
@@ -565,8 +566,8 @@
                         <div style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1;" onclick="payUnpaidBill('${b.category}', ${b.amount})">
                             <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
                             <div>
-                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${b.category} (คลิกเพื่อชำระเงิน 👆)</div>
-                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${timeText} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
+                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${catWithTime} (คลิกเพื่อชำระเงิน 👆)</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 15px;">
@@ -581,8 +582,8 @@
                         <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
                             <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
                             <div>
-                                <div style="font-weight: 500; font-size:14px;">${b.category}</div>
-                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${timeText} • ${b.account}</div>
+                                <div style="font-weight: 500; font-size:14px;">${catWithTime}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 15px;">
