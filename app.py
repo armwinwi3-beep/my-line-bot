@@ -75,22 +75,25 @@ def api_data():
                             pass
 
                 # คำนวณยอดสะสมแต่ละบัญชี
+                # 🛠️ คำนวณยอดสะสมแต่ละบัญชีแบบรวบยอดและแม่นยำ (ไม่บวกซ้ำซ้อน)
                 if record_type == "รายรับ":
                     income_accounts_all[account] = income_accounts_all.get(account, 0) + amt
-                elif record_type == "รายจ่าย":
+                elif record_type in ["รายจ่าย", "ให้ยืมเงิน"]:
+                    # ทั้งรายจ่ายและให้ยืมเงิน ถือเป็นการเอาเงินออกจากบัญชี
                     expense_accounts_all[account] = expense_accounts_all.get(account, 0) + amt
+                    if record_type == "ให้ยืมเงิน":
+                        debtors_all[cat] = debtors_all.get(cat, 0) + amt
                 elif record_type == "รายจ่ายต้องชำระต่อเดือน":
                     if status != "ยังไม่จ่าย" and status != "บิลค้างชำระ (เคลียร์แล้ว)":
                         if account != "-":
-                            monthly_accounts_all[account] = monthly_accounts_all.get(account, 0) + amt
+                            expense_accounts_all[account] = expense_accounts_all.get(account, 0) + amt
                 elif record_type == "ย้ายเงิน":
                     src_acc = account
                     dst_acc = cat
-                    if src_acc != "-": transfer_out_all[src_acc] = transfer_out_all.get(src_acc, 0) + amt
-                    if dst_acc != "-": transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
-                elif record_type == "ให้ยืมเงิน":
-                    expense_accounts_all[account] = expense_accounts_all.get(account, 0) + amt
-                    debtors_all[cat] = debtors_all.get(cat, 0) + amt
+                    if src_acc != "-": 
+                        transfer_out_all[src_acc] = transfer_out_all.get(src_acc, 0) + amt
+                    if dst_acc != "-": 
+                        transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
                 elif record_type == "ได้คืนจากลูกหนี้":
                     income_accounts_all[account] = income_accounts_all.get(account, 0) + amt
                     debtors_all[cat] = debtors_all.get(cat, 0) - amt
@@ -133,16 +136,18 @@ def api_data():
         records.extend(unpaid_records)
         
         # คำนวณยอดเงินคงเหลือสุทธิแต่ละบัญชี
+        # คำนวณยอดเงินคงเหลือสุทธิแต่ละบัญชี
         all_accounts = set(income_accounts_all.keys()) | set(expense_accounts_all.keys()) | set(monthly_accounts_all.keys()) | set(transfer_in_all.keys()) | set(transfer_out_all.keys())
         balance_accounts = {}
         total_balance = 0.0
         
         for acc in all_accounts:
             if acc == "-" or acc == "รอระบุบัญชี": continue
+            # สูตรคำนวณ: (รายรับ + ย้ายเงินเข้า + ได้คืน) - (รายจ่าย + บิลจ่าย + ย้ายเงินออก + ให้ยืม)
             bal = (income_accounts_all.get(acc, 0.0) 
+                   + transfer_in_all.get(acc, 0.0)
                    - expense_accounts_all.get(acc, 0.0) 
                    - monthly_accounts_all.get(acc, 0.0) 
-                   + transfer_in_all.get(acc, 0.0) 
                    - transfer_out_all.get(acc, 0.0))
             balance_accounts[acc] = bal
             total_balance += bal
