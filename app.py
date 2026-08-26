@@ -10,7 +10,7 @@ CORS(app)
 # 🔑 ตั้งค่าการเชื่อมต่อ Supabase (แทน Google Sheets)
 # อย่าลืมเปลี่ยน URL และ Key ให้ตรงกับโปรเจกต์ของคุณใน Supabase
 SUPABASE_URL = "https://tmwnszhxikgjelpskqj.supabase.co"
-SUPABASE_KEY = "sb_secret_WpDE6-Qu-01NubFEwcG0BA_Q7Ctp6wa"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTM1ODksImV4cCI6MjEwMzMyOTU4OX0.d2w1T00nHf32Ni_wrg_Q7z-zHgwIPlyfdm9gbjlBNZs"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
