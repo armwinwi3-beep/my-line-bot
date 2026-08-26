@@ -24,7 +24,7 @@ def home():
 @app.route("/api/data", methods=["GET"])
 def api_data():
     month_str = request.args.get('month') # รูปแบบเช่น "08/26"
-    user_id = request.args.get('user_id', 'my_account') # รองรับหลาย User (ค่าเริ่มต้นคือ my_account)
+    user_id = request.args.get('user_id', 'admin') # รองรับหลาย User (ค่าเริ่มต้นคือ my_account)
     
     try:
         # ดึงข้อมูลจากตาราง transactions ใน Supabase
@@ -152,7 +152,7 @@ def api_data():
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
-    user_id = data.get('user_id', 'my_account')
+    user_id = data.get('user_id', 'admin')
     
     now = datetime.now(TH_TZ)
     date_str = now.strftime("%d/%m/%Y")
@@ -200,7 +200,7 @@ def api_add():
 def api_delete():
     data = request.json
     record_id = data.get('id') # ใช้ ID ในการลบ แม่นยำที่สุด
-    user_id = data.get('user_id', 'my_account')
+    user_id = data.get('user_id', 'admin')
     
     try:
         if record_id:
