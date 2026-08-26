@@ -3,5 +3,7 @@ line-bot-sdk
 requests
 gspread
 gunicorn
+Flask==3.0.2
 Flask-Cors==4.0.0
 gunicorn==21.2.0
+supabase==2.3.0
