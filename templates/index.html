@@ -1,319 +1,1100 @@
 <!DOCTYPE html>
 <html lang="th">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>บันทึกรายการ - MoneyBase</title>
-    <!-- โหลดฟอนต์ Noto Sans Thai ให้ดูทันสมัย -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MoneyBase - สรุปรายรับรายจ่าย</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Noto Sans Thai', sans-serif;
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Thai', sans-serif; }
+        
+        html, body { 
+            width: 100%; height: 100%; max-width: 100vw; 
+            overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #0B192C; color: white; 
+            -webkit-text-size-adjust: 100%;
         }
         
-        body {
-            background-color: #0B192C;
-            color: white;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
+        .page { 
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; background-color: #0B192C; 
+            z-index: 10; opacity: 0; pointer-events: none;
+            transform: translateX(20px);
+            transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
         }
-        /* แถบด้านบน (สีเหลือง) */
+        .page.active { 
+            opacity: 1; pointer-events: auto; z-index: 20;
+            transform: translateX(0);
+        }
+        #home-page { transform: translateX(-20px); }
+        #home-page.active { transform: translateX(0); }
         
-        .top-bar {
-            background-color: #FACC15;
-            padding: 20px 15px 0 15px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            border-radius: 0 0 15px 15px;
+        #form-page { transform: translateY(30px); z-index: 30; background-color: #0B192C; }
+        #form-page.active { transform: translateY(0); }
+
+        .toast {
+            position: fixed; top: env(safe-area-inset-top, 20px); left: 50%; transform: translateX(-50%);
+            background: #22c55e; color: white; padding: 10px 20px; border-radius: 30px;
+            font-size: 14px; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 9999; display: none; transition: 0.3s; white-space: nowrap;
+            margin-top: 15px;
         }
+
+        .yellow-card { background-color: #FACC15; color: #1e293b; padding: 20px; border-radius: 15px; margin: env(safe-area-inset-top, 20px) 15px 20px 15px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .month-selector { display: flex; align-items: center; gap: 15px; color: #0284c7; font-weight: 600; font-size: 16px; margin-bottom: 20px; }
+        .month-selector span { cursor: pointer; padding: 5px; user-select: none; }
+        .month-selector span:hover { opacity: 0.7; }
         
-        .close-btn {
-            font-size: 24px;
-            color: #1e293b;
-            font-weight: bold;
-            cursor: pointer;
-            padding-bottom: 10px;
-        }
-        /* แท็บเมนู */
+        .expense-summary { display: flex; justify-content: space-between; align-items: flex-start; }
+        .expense-text { font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 2px; }
+        .expense-amount { font-size: 32px; font-weight: 700; line-height: 1.2; color: #0B192C; transition: 0.3s; }
+        .expense-sub-amount { font-size: 22px; font-weight: 600; color: #ef4444; transition: 0.3s; }
+
+        .summary-btn { background-color: #1d4ed8; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; margin-top: 10px; transition: 0.2s; }
+        .summary-btn:active { transform: scale(0.95); }
         
-        .tabs {
-            display: flex;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px 10px 0 0;
-            overflow: hidden;
-            margin-bottom: -1px;
-        }
+        .records-container { flex: 1; overflow-y: auto; padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
         
-        .tab {
-            flex: 1;
-            padding: 10px;
-            text-align: center;
-            color: #1e293b;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: 0.3s;
-        }
+        .daily-section { display: flex; margin-top: 10px; border-top: 1px solid #1e293b; }
+        .daily-sidebar { width: 60px; text-align: center; padding-top: 15px; border-left: 4px solid #FACC15; color: #FACC15; }
+        .daily-text { font-size: 12px; }
+        .daily-number { font-size: 20px; font-weight: bold; }
+        .daily-content { flex: 1; background-color: #11223A; padding: 15px; }
+        .daily-header { display: flex; justify-content: flex-end; font-size: 14px; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+        .empty-state { text-align: center; color: #f8fafc; font-size: 16px; padding: 30px 0; font-weight: 300; }
+        .transaction-item { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 14px; }
+        .transaction-cat { color: white; font-weight: 500; }
+        .transaction-sub { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+
+        .delete-btn { background: transparent; border: none; color: #64748b; cursor: pointer; font-size: 16px; padding: 5px; transition: 0.2s; }
+        .delete-btn:hover { color: #ef4444; }
+
+        .fab-container { position: absolute; bottom: calc(80px + env(safe-area-inset-bottom)); width: 100%; display: flex; justify-content: center; z-index: 50; }
+        .fab-btn { background-color: #0066FF; color: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4); display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .fab-btn:active { transform: scale(0.95); }
         
-        .tab.active {
-            background-color: #0B192C;
-            color: white;
-            border-radius: 10px 10px 0 0;
+        .bottom-nav { 
+            background-color: white; height: calc(60px + env(safe-area-inset-bottom)); 
+            padding-bottom: env(safe-area-inset-bottom);
+            display: flex; position: absolute; bottom: 0; left: 0; right: 0; width: 100%; 
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 40; transition: transform 0.3s ease; 
         }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 11px; cursor: pointer; transition: 0.2s; }
+        .nav-item.active { color: #0066FF; font-weight: 600; }
+        .nav-item:active { transform: scale(0.9); }
+        .nav-item svg { width: 22px; height: 22px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; transition: 0.2s; }
+
+        .top-bar { background-color: #FACC15; padding: env(safe-area-inset-top, 20px) 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
+        .close-btn { font-size: 16px; color: #1e293b; font-weight: 700; cursor: pointer; padding-bottom: 12px; margin-right: 15px; transition: 0.2s; }
+        .close-btn:active { opacity: 0.5; }
+
+        /* 🌟 ปรับให้เมนูเลื่อนซ้ายขวาได้ */
+        .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow-x: auto; margin-bottom: -1px; width: 100%; white-space: nowrap; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab { flex: 0 0 auto; padding: 12px 15px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        .tab.active { background-color: #0B192C; color: white; border-radius: 10px 10px 0 0; }
         
-        .tab svg {
-            width: 20px;
-            height: 20px;
-            margin-bottom: 5px;
-            stroke: currentColor;
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-        }
-        /* พื้นที่เนื้อหา */
+        .content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
         
-        .content {
-            padding: 20px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
+        .amount-box { background-color: #11223A; border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 15px; }
+        .amount-icon { font-size: 30px; font-weight: bold; }
+        .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; } .color-bill { color: #f97316; } .color-debt { color: #8b5cf6; }
+        .amount-input { background: transparent; border: none; outline: none; color: white; font-size: 40px; width: 100%; font-weight: 300; }
+        .amount-input::placeholder { color: #475569; }
+        .currency { color: #475569; font-size: 30px; font-weight: 300; }
         
-        .date-display {
-            font-size: 14px;
-            color: #60a5fa;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-weight: 500;
-        }
-        /* กล่องใส่จำนวนเงิน */
-        
-        .amount-box {
-            background-color: #11223A;
-            border-radius: 15px;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .amount-icon {
-            font-size: 30px;
-            font-weight: bold;
-        }
-        /* สีประจำแท็บ */
-        
-        .color-expense {
-            color: #ef4444;
-        }
-        /* แดง */
-        
-        .color-income {
-            color: #22c55e;
-        }
-        /* เขียว */
-        
-        .color-transfer {
-            color: #eab308;
-        }
-        /* เหลือง */
-        
-        .amount-input {
-            background: transparent;
-            border: none;
-            outline: none;
-            color: white;
-            font-size: 40px;
-            width: 100%;
-            font-weight: 300;
-        }
-        
-        .amount-input::placeholder {
-            color: #475569;
-        }
-        
-        .currency {
-            color: #475569;
-            font-size: 30px;
-            font-weight: 300;
-        }
-        /* กล่องฟอร์มอื่นๆ */
-        
-        .form-box {
-            background-color: #11223A;
-            border-radius: 15px;
-            padding: 15px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            cursor: pointer;
-        }
-        
-        .form-box svg {
-            width: 24px;
-            height: 24px;
-            stroke: #60a5fa;
-            fill: none;
-            stroke-width: 2;
-        }
-        
-        .form-box input,
-        .form-box select {
-            background: transparent;
-            border: none;
-            outline: none;
-            color: white;
-            font-size: 16px;
-            width: 100%;
-        }
-        
-        .form-box input::placeholder {
-            color: #60a5fa;
-        }
-        
-        .form-box select {
-            color: #60a5fa;
-            appearance: none;
-        }
-        /* ปุ่มบันทึก */
-        
-        .save-btn {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: 600;
-            width: 100%;
-            margin-top: auto;
-            margin-bottom: 20px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-        }
-        /* ข้อความอธิบายย้ายเงิน */
-        
-        .transfer-note {
-            color: #94a3b8;
-            font-size: 12px;
-            text-align: center;
-            margin-top: 10px;
-            line-height: 1.5;
-            display: none;
-        }
+        .form-box { background-color: #11223A; border-radius: 15px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; }
+        .form-box:active { opacity: 0.7; }
+        .form-box input, .form-box select { background: transparent; border: none; outline: none; color: white; font-size: 16px; width: 100%; }
+        .form-box select { color: #60a5fa; appearance: none; }
+        .form-box select option, .form-box select optgroup { background-color: #0B192C; color: white; }
+
+        .save-btn { background-color: #3b82f6; color: white; border: none; padding: 15px; border-radius: 30px; font-size: 18px; font-weight: 600; width: 100%; margin-top: auto; margin-bottom: 20px; cursor: pointer; transition: 0.2s; }
+        .save-btn:active { transform: scale(0.98); }
+
+        .insight-box { padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; }
+        .cat-item { margin-bottom: 15px; }
+        .cat-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
+        .cat-bar-bg { background-color: #1e293b; height: 8px; border-radius: 4px; overflow: hidden; }
+        .cat-bar-fill { background-color: #FACC15; height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.25, 0.8, 0.25, 1); }
     </style>
 </head>
-
 <body>
 
-    <!-- แถบด้านบน -->
-    <div class="top-bar">
-        <div class="close-btn" onclick="alert('ปิดหน้าจอ (เตรียมเชื่อมกับ LINE LIFF)')">✕</div>
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('expense', this)">
-                <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> รายจ่าย
+    <div id="toast" class="toast">กำลังประมวลผล...</div>
+
+    <!-- 1. หน้าหลัก -->
+    <div id="home-page" class="page active">
+        <div class="yellow-card">
+            <div class="month-selector">
+                <span onclick="changeMonth(-1)">&lt;</span>
+                <span id="monthYearDisplay">📅 ...</span>
+                <span onclick="changeMonth(1)">&gt;</span>
             </div>
-            <div class="tab" onclick="switchTab('income', this)">
-                <svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg> รายรับ
+            
+            <div class="expense-summary">
+                <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                    <div>
+                        <div class="expense-text">ยอดเงินคงเหลือรวม (All)</div>
+                        <div class="expense-amount" id="displayTotalBalance">... ฿</div>
+                    </div>
+                    <div>
+                        <div class="expense-text">ยอดใช้จ่ายเดือนนี้</div>
+                        <div class="expense-sub-amount" id="displayTotalExpense">... ฿</div>
+                    </div>
+                </div>
+                <button class="summary-btn" onclick="openSummary()">
+                    <svg style="width: 16px; height: 16px; fill: white;" viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
+                    ดูสรุป
+                </button>
             </div>
-            <div class="tab" onclick="switchTab('transfer', this)">
-                <svg viewBox="0 0 24 24"><path d="M7 10h14l-4-4M17 14H3l4 4"/></svg> ย้ายเงิน
+        </div>
+        <div class="records-container" id="records-container"></div>
+    </div>
+
+    <!-- 2. หน้าปฏิทินออมเงิน -->
+    <div id="calendar-page" class="page">
+        <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
+            <div style="font-size:18px; font-weight:bold; color:#1e293b;">📅 ปฏิทินออมเงิน</div>
+        </div>
+        <div class="content" id="calendar-content">
+            <div class="empty-state">กำลังโหลดปฏิทิน... ⏳</div>
+        </div>
+    </div>
+    
+    <!-- 🌟 3. หน้าคนยืมเงิน -->
+    <div id="debtors-page" class="page">
+        <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
+            <div style="font-size:18px; font-weight:bold; color:#1e293b;">🤝 คนยืมเงิน (ลูกหนี้)</div>
+        </div>
+        <div class="content">
+            <div class="insight-box" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); box-shadow: 0 4px 15px rgba(99,102,241,0.3);">
+                <div class="insight-title" style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">ยอดเงินที่คนอื่นยืมไปรวม</div>
+                <div style="font-size: 36px; font-weight: 700;" id="debtors-total">... ฿</div>
             </div>
+            <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithDebtor()">
+                + จดให้ยืม/ได้คืน
+            </button>
+            <div id="debtors-list"></div>
         </div>
     </div>
 
-    <!-- พื้นที่เนื้อหา -->
-    <div class="content">
-        <div class="date-display">
-            <svg style="width: 16px; height: 16px; stroke: currentColor; fill: none;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span id="currentDate">วันนี้</span>
+    <!-- 4. หน้าบิลรายเดือน -->
+    <div id="bills-page" class="page">
+        <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
+            <div style="font-size:18px; font-weight:bold; color:#1e293b;">📋 บิลรายเดือน</div>
         </div>
-
-        <div class="amount-box">
-            <div id="typeIcon" class="amount-icon color-expense">↑</div>
-            <input type="number" id="amount" class="amount-input" placeholder="0">
-            <div class="currency">฿</div>
+        <div class="content">
+            <div class="insight-box" style="background: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 4px 15px rgba(234,88,12,0.3);">
+                <div class="insight-title" style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">ยอดบิลชำระแล้วเดือนนี้</div>
+                <div style="font-size: 36px; font-weight: 700;" id="bills-total">... ฿</div>
+            </div>
+            <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithBill()">
+                + จดบิลเพิ่ม
+            </button>
+            <div id="bills-list"></div>
         </div>
+    </div>
 
-        <div class="form-box" id="categoryBox">
-            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <select id="category">
-                <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
-                <option value="อาหาร">🍔 อาหาร</option>
-                <option value="เดินทาง">🚗 เดินทาง</option>
-                <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
-                <option value="ทั่วไป">ทั่วไป</option>
-            </select>
+    <!-- 5. หน้าสรุป -->
+    <div id="summary-page" class="page">
+        <div class="top-bar">
+            <div class="close-btn" onclick="openHome()">‹ กลับ</div>
+            <div style="font-size:18px; font-weight:bold; color:#1e293b; padding-bottom:10px;">📊 สรุปพฤติกรรม</div>
+            <div style="width: 40px;"></div>
         </div>
+        <div class="content" id="summary-content"></div>
+    </div>
 
-        <div class="form-box">
-            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <input type="text" id="note" placeholder="เพิ่มโน้ต">
+    <!-- 6. หน้าฟอร์ม -->
+    <div id="form-page" class="page">
+        <div class="top-bar">
+            <div class="close-btn" onclick="openHome()">ยกเลิก</div>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('expense', this)">รายจ่าย</div>
+                <div class="tab" onclick="switchTab('income', this)">รายรับ</div>
+                <div class="tab" onclick="switchTab('transfer', this)">ย้ายเงิน</div>
+                <div class="tab" onclick="switchTab('bill', this)">บิล</div>
+                <div class="tab" onclick="switchTab('debtor', this)">ลูกหนี้</div>
+            </div>
         </div>
+        <div class="content">
+            <div style="font-size: 14px; color: #60a5fa; font-weight: 500;" id="formDateDisplay">...</div>
+            <div class="amount-box">
+                <div id="typeIcon" class="amount-icon color-expense">↑</div>
+                <input type="number" id="amount" class="amount-input" placeholder="0">
+                <div class="currency">฿</div>
+            </div>
+            
+            <div class="form-box" id="accountBox">
+                <select id="account">
+                    <option value="" disabled selected>เลือกบัญชีที่ใช้เงิน</option>
+                    <option value="กสิกร">🟢 กสิกร</option>
+                    <option value="กรุงไทย">🔵 กรุงไทย</option>
+                    <option value="TrueMoney">🟠 TrueMoney</option>
+                    <option value="เงินสด">💵 เงินสด</option>
+                </select>
+            </div>
 
-        <div class="transfer-note" id="transferNote">
-            รายการย้ายเงิน ไม่นับเป็นรายจ่าย/รายรับ<br>ใช้จดการย้ายเงินข้ามบัญชี เติมเงินวอลเล็ท จ่ายหนี้
+            <div id="transferAccountBox" style="display: none; flex-direction: column; gap: 15px;">
+                <div class="form-box">
+                    <select id="sourceAccount">
+                        <option value="" disabled selected>โอนจากบัญชี (ต้นทาง)</option>
+                        <option value="กสิกร">🟢 กสิกร</option>
+                        <option value="กรุงไทย">🔵 กรุงไทย</option>
+                        <option value="TrueMoney">🟠 TrueMoney</option>
+                        <option value="เงินสด">💵 เงินสด</option>
+                    </select>
+                </div>
+                <div style="text-align: center; color: #60a5fa; font-weight: bold;">⬇️ ย้ายเข้าบัญชี ⬇️</div>
+                <div class="form-box">
+                    <select id="destinationAccount">
+                        <option value="" disabled selected>ย้ายเข้าบัญชี (ปลายทาง)</option>
+                        <option value="กสิกร">🟢 กสิกร</option>
+                        <option value="กรุงไทย">🔵 กรุงไทย</option>
+                        <option value="TrueMoney">🟠 TrueMoney</option>
+                        <option value="เงินสด">💵 เงินสด</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-box" id="categoryBox">
+                <select id="category"></select>
+            </div>
+            
+            <div class="form-box" id="statusBox" style="display: none;">
+                <select id="billStatus" style="color: #facc15; font-weight: bold;" onchange="toggleBillAccountBox()">
+                    <option value="ยังไม่จ่าย">⏳ ค้างชำระ (ยังไม่จ่าย)</option>
+                    <option value="จ่ายแล้ว">✅ จ่ายแล้ว</option>
+                </select>
+            </div>
+            
+            <!-- 🌟 ตัวเลือกสำหรับลูกหนี้ -->
+            <div class="form-box" id="debtorActionBox" style="display: none;">
+                <select id="debtorAction" style="color: #8b5cf6; font-weight: bold;">
+                    <option value="lend">📤 ให้เพื่อนยืมเงิน</option>
+                    <option value="repay">📥 เพื่อนคืนเงินให้แล้ว</option>
+                </select>
+            </div>
+            <div class="form-box" id="debtorNameBox" style="display: none;">
+                <input type="text" id="debtorName" placeholder="พิมพ์ชื่อคนยืม (เช่น นัท, สมชาย)">
+            </div>
+
+            <div class="form-box">
+                <input type="text" id="note" placeholder="เพิ่มโน้ต">
+            </div>
+
+            <button class="save-btn" onclick="saveRecord()">บันทึก</button>
         </div>
+    </div>
 
-        <button class="save-btn" onclick="saveRecord()">บันทึก</button>
+    <!-- ปุ่มลอย & เมนู -->
+    <div class="fab-container" id="fab-button">
+        <button class="fab-btn" onclick="openForm()">
+            <svg style="width: 20px; height: 20px; stroke: white; fill: none; stroke-width: 2;" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            จดเพิ่ม | ∧
+        </button>
+    </div>
+    
+    <div class="bottom-nav" id="main-nav">
+        <div class="nav-item active" id="nav-home" onclick="openHome()">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            หน้าแรก
+        </div>
+        <div class="nav-item" id="nav-calendar" onclick="openCalendar()">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            ปฏิทิน
+        </div>
+        <div class="nav-item" id="nav-debtors" onclick="openDebtors()">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            คนยืม
+        </div>
+        <div class="nav-item" id="nav-bills" onclick="openBills()">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            บิลรายเดือน
+        </div>
     </div>
 
     <script>
+        const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        const thDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+        const billCategories = ["ShopeePay", "SEasyCash", "SPayExtra", "Internet", "ค่าทำฟัน", "ประกันสังคม", "บิลอื่นๆ"];
+        
+        let currentDate = new Date(); 
+        let viewDate = new Date(); 
+        let currentRecords = [];
+        let currentAccountBalances = {};
+        let currentDebtors = {}; // เก็บข้อมูลลูกหนี้
+        let currentTotalBalance = 0; 
+        let simulatedIncome = 0;
+
+        function showToast(msg, isError = false) {
+            let t = document.getElementById('toast');
+            t.style.background = isError ? '#ef4444' : '#f59e0b'; 
+            if(msg.includes('สำเร็จ')) t.style.background = '#22c55e'; 
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 2500);
+        }
+
+        function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
+        function deactivateAllNavs() { document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); }
+
+        function openHome(silent = false) {
+            hideAllPages(); deactivateAllNavs();
+            document.getElementById('home-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('fab-button').style.display = 'flex';
+            document.getElementById('nav-home').classList.add('active');
+            if(!silent) fetchMonthData(); 
+        }
+
+        function openCalendar() {
+            hideAllPages(); deactivateAllNavs();
+            document.getElementById('calendar-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('fab-button').style.display = 'flex'; 
+            document.getElementById('nav-calendar').classList.add('active');
+            renderCalendar(); 
+        }
+
+        function openDebtors() {
+            hideAllPages(); deactivateAllNavs();
+            document.getElementById('debtors-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('fab-button').style.display = 'flex'; 
+            document.getElementById('nav-debtors').classList.add('active');
+            renderDebtors(); 
+        }
+
+        function openBills() {
+            hideAllPages(); deactivateAllNavs();
+            document.getElementById('bills-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('fab-button').style.display = 'flex'; 
+            document.getElementById('nav-bills').classList.add('active');
+            renderBills(); 
+        }
+
+        function openSummary() {
+            hideAllPages();
+            document.getElementById('summary-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(100%)'; 
+            document.getElementById('fab-button').style.display = 'none';
+            renderSummary();
+        }
+
+        function openForm() {
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
+            document.getElementById('fab-button').style.display = 'none';
+            switchTab('expense', document.querySelectorAll('.tab')[0]);
+        }
+
+        function openFormWithBill() {
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
+            document.getElementById('fab-button').style.display = 'none';
+            switchTab('bill', document.querySelectorAll('.tab')[3]); 
+        }
+        
+        function openFormWithDebtor() {
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
+            document.getElementById('fab-button').style.display = 'none';
+            switchTab('debtor', document.querySelectorAll('.tab')[4]); 
+        }
+
+        function payUnpaidBill(categoryName, amountVal) {
+            openFormWithBill();
+            document.getElementById('amount').value = amountVal;
+            document.getElementById('category').value = categoryName;
+            document.getElementById('billStatus').value = 'จ่ายแล้ว';
+            toggleBillAccountBox();
+        }
+
+        function applySimulation(source) {
+            let inputId = source === 'calendar' ? 'demo-income-input-cal' : 'demo-income-input';
+            const val = parseFloat(document.getElementById(inputId).value);
+            if(!isNaN(val) && val >= 0) {
+                simulatedIncome = val;
+                if (document.getElementById('bills-page').classList.contains('active')) renderBills(); 
+                if (document.getElementById('calendar-page').classList.contains('active')) renderCalendar(); 
+            }
+        }
+
+        function clearSimulation() {
+            simulatedIncome = 0;
+            if (document.getElementById('bills-page').classList.contains('active')) renderBills(); 
+            if (document.getElementById('calendar-page').classList.contains('active')) renderCalendar(); 
+        }
+
+        async function deleteRecord(date, amount, category, sheetName) {
+            if(!confirm(`⚠️ ต้องการลบรายการ "${category}" ใช่ไหมครับ?`)) return;
+
+            showToast("🗑️ กำลังลบข้อมูลหลังบ้าน...");
+            
+            fetch('/api/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: date, amount: amount, category: category, month: sheetName })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if(result.status === 'success') {
+                    showToast("✅ ลบสำเร็จ");
+                    fetchMonthData(true); 
+                } else {
+                    showToast('❌ ' + result.message, true);
+                }
+            }).catch(e => { showToast('❌ ขาดการเชื่อมต่อ', true); });
+
+            currentRecords = currentRecords.filter(r => !(r.date === date && r.amount === amount && r.category === category));
+            renderRecords(currentRecords);
+        }
+
+        function updateDateDisplay() {
+            const viewM = thMonths[viewDate.getMonth()];
+            const viewY = (viewDate.getFullYear() + 543).toString().slice(-2);
+            document.getElementById('monthYearDisplay').innerText = `📅 ${viewM} ${viewY}`;
+
+            const d = currentDate.getDate();
+            const currM = thMonths[currentDate.getMonth()];
+            const currY = (currentDate.getFullYear() + 543).toString().slice(-2);
+            const dayName = thDays[currentDate.getDay()];
+            document.getElementById('formDateDisplay').innerText = `📅 ${dayName} ${d} ${currM} ${currY}`;
+            
+            fetchMonthData();
+        }
+
+        function changeMonth(direction) {
+            viewDate.setMonth(viewDate.getMonth() + direction);
+            updateDateDisplay();
+        }
+
+        async function fetchMonthData(silent = false) {
+            const m = String(viewDate.getMonth() + 1).padStart(2, '0');
+            const y = String(viewDate.getFullYear()).slice(-2);
+            const monthStr = `${m}/${y}`; 
+            const cacheKey = 'moneybase_data_' + monthStr;
+
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                try {
+                    const data = JSON.parse(cachedData);
+                    updateUIWithData(data, monthStr);
+                } catch(e){}
+            } else if (!silent) {
+                document.getElementById('records-container').innerHTML = '<div class="empty-state">กำลังโหลดข้อมูล... ⏳</div>';
+            }
+
+            try {
+                const response = await fetch(`/api/data?month=${monthStr}`);
+                const data = await response.json();
+                
+                localStorage.setItem(cacheKey, JSON.stringify(data)); 
+                updateUIWithData(data, monthStr); 
+            } catch (error) {
+                if(!cachedData && !silent) {
+                    document.getElementById('records-container').innerHTML = '<div class="empty-state">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+                }
+            }
+        }
+
+        function updateUIWithData(data, monthStr) {
+            currentRecords = data.records || []; 
+            currentAccountBalances = data.account_balances || {};
+            currentDebtors = data.debtors || {}; // รับข้อมูลลูกหนี้
+            currentTotalBalance = data.total_balance || 0; 
+            
+            document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
+            document.getElementById('displayTotalExpense').innerText = data.total_expense.toLocaleString('th-TH') + ' ฿';
+            
+            if (document.getElementById('home-page').classList.contains('active')) {
+                renderRecords(currentRecords);
+            } else if (document.getElementById('bills-page').classList.contains('active')) {
+                renderBills();
+            } else if (document.getElementById('summary-page').classList.contains('active')) {
+                renderSummary();
+            } else if (document.getElementById('calendar-page').classList.contains('active')) {
+                renderCalendar();
+            } else if (document.getElementById('debtors-page').classList.contains('active')) {
+                renderDebtors();
+            }
+        }
+
+        function renderRecords(records) {
+            const container = document.getElementById('records-container');
+            const validRecords = records.filter(r => r.status !== 'ยังไม่จ่าย');
+            
+            if (!validRecords || validRecords.length === 0) {
+                container.innerHTML = '<div class="empty-state">ไม่มีรายการในเดือนนี้</div>';
+                return;
+            }
+
+            const grouped = {};
+            validRecords.forEach(r => {
+                if (!grouped[r.date]) grouped[r.date] = { expense: 0, income: 0, items: [] };
+                if (r.type.includes('รายจ่าย') || r.type === 'ให้ยืมเงิน') grouped[r.date].expense += r.amount;
+                if (r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') grouped[r.date].income += r.amount;
+                grouped[r.date].items.push(r);
+            });
+
+            const sortedDates = Object.keys(grouped).sort((a, b) => {
+                const [d1, m1, y1] = a.split('/');
+                const [d2, m2, y2] = b.split('/');
+                return new Date(y2, m2-1, d2) - new Date(y1, m1-1, d1);
+            });
+
+            const m = String(viewDate.getMonth() + 1).padStart(2, '0');
+            const y = String(viewDate.getFullYear()).slice(-2);
+            const monthStr = `${m}/${y}`;
+
+            let html = '';
+            sortedDates.forEach(date => {
+                const dayNum = parseInt(date.split('/')[0]);
+                const g = grouped[date];
+                html += `
+                <div class="daily-section">
+                    <div class="daily-sidebar"><div class="daily-text">วันที่</div><div class="daily-number">${dayNum}</div></div>
+                    <div class="daily-content">
+                        <div class="daily-header">
+                            ${g.expense > 0 ? `<span style="color:#ef4444;">↓ จ่าย ${g.expense.toLocaleString('th-TH')}</span>` : ''}
+                            ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
+                        </div>
+                        ${g.items.slice().reverse().map(item => { 
+                            let timeText = item.time ? ` (${item.time.substring(0, 5)} น.)` : '';
+                            let displayCat = item.category + timeText;
+                            
+                            let subParts = [];
+                            if (item.account !== '-') subParts.push(item.account);
+                            if (item.note !== '-') subParts.push(`(${item.note})`);
+                            let displaySub = subParts.join(' ');
+
+                            let isExpense = item.type.includes('รายจ่าย') || item.type === 'ให้ยืมเงิน';
+                            let isIncome = item.type === 'รายรับ' || item.type === 'ได้คืนจากลูกหนี้';
+                            let typeColor = isExpense ? '#ef4444' : (isIncome ? '#22c55e' : '#eab308');
+                            let sign = isExpense ? '-' : (isIncome ? '+' : '');
+
+                            if (item.type === 'ย้ายเงิน') {
+                                displayCat = '🔄 ย้ายเงิน' + timeText;
+                                displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''}`;
+                            } else if (item.type === 'ให้ยืมเงิน') {
+                                displayCat = '📤 ให้ยืม: ' + item.category + timeText;
+                            } else if (item.type === 'ได้คืนจากลูกหนี้') {
+                                displayCat = '📥 ได้คืนจาก: ' + item.category + timeText;
+                            }
+
+                            return `
+                            <div class="transaction-item">
+                                <div><div class="transaction-cat">${displayCat}</div><div class="transaction-sub">${displaySub}</div></div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="color:${typeColor}; font-weight:600;">
+                                        ${sign}${item.amount.toLocaleString('th-TH')}
+                                    </div>
+                                    <button class="delete-btn" onclick="deleteRecord('${item.date}', ${item.amount}, '${item.category}', '${monthStr}')" title="ลบรายการ">🗑️</button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // 🌟 ฟังก์ชันเรนเดอร์หน้าลูกหนี้
+        function renderDebtors() {
+            let totalOwed = 0;
+            let html = '';
+            
+            let sortedDebtors = Object.entries(currentDebtors)
+                                .filter(d => d[1] > 0)
+                                .sort((a,b) => b[1] - a[1]);
+            
+            sortedDebtors.forEach(d => {
+                totalOwed += d[1];
+                html += `
+                <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #8b5cf6;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="background: #8b5cf6; padding: 10px; border-radius: 10px; font-size:18px;">👤</div>
+                        <div>
+                            <div style="font-weight: 500; font-size:14px; color: white;">${d[0]}</div>
+                            <div style="font-size: 12px; color: #94a3b8;">ยอดค้างชำระทั้งหมด</div>
+                        </div>
+                    </div>
+                    <div style="color: #facc15; font-weight: 600; font-size: 16px;">
+                        ${d[1].toLocaleString('th-TH')} ฿
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('debtors-total').innerText = totalOwed.toLocaleString('th-TH') + ' ฿';
+            
+            if (html === '') {
+                html = '<div class="empty-state">ไม่มีใครยืมเงินคุณเลย 🎉</div>';
+            }
+            document.getElementById('debtors-list').innerHTML = html;
+        }
+
+        function renderBills() {
+            let totalPaid = 0;
+            let totalUnpaid = 0;
+            let paidHtml = '';
+            let unpaidHtml = '';
+
+            const bills = currentRecords.filter(r => r.type === 'รายจ่ายต้องชำระต่อเดือน').reverse();
+
+            bills.forEach(b => {
+                let timeText = b.time ? ` (${b.time.substring(0, 5)} น.)` : '';
+                let catWithTime = b.category + timeText;
+
+                if (b.status === 'ยังไม่จ่าย') {
+                    totalUnpaid += b.amount;
+                    unpaidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ef4444;">
+                        <div style="display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1;" onclick="payUnpaidBill('${b.category}', ${b.amount})">
+                            <div style="background: #ef4444; padding: 10px; border-radius: 10px; font-size:18px;">⏳</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px; color: #ef4444;">${catWithTime} (คลิกเพื่อชำระเงิน 👆)</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} ${b.note !== '-' ? `• <span style="color:#facc15;">${b.note}</span>` : ''}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: #ef4444; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
+                    </div>`;
+                } else {
+                    totalPaid += b.amount;
+                    paidHtml += `
+                    <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                            <div style="background: #22c55e; padding: 10px; border-radius: 10px; font-size:18px;">✅</div>
+                            <div>
+                                <div style="font-weight: 500; font-size:14px;">${catWithTime}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">${b.date} • ${b.account}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="color: white; font-weight: 600;">${b.amount.toLocaleString('th-TH')} ฿</div>
+                            <button class="delete-btn" onclick="deleteRecord('${b.date}', ${b.amount}, '${b.category}', '${b.sheet}')" title="ลบรายการ">🗑️</button>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            document.getElementById('bills-total').innerText = totalPaid.toLocaleString('th-TH') + ' ฿';
+            
+            let demoHtml = `
+            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลอง (Demo)</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">กรอกรายรับที่คาดว่าจะได้ในอนาคต เพื่อเช็คว่าเงินจะพอจ่ายบิลไหม</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="demo-income-input" placeholder="รายรับล่วงหน้า..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
+                    <button onclick="applySimulation('bills')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
+                </div>
+            </div>`;
+
+            let finalHtml = demoHtml;
+            
+            if (totalUnpaid > 0) {
+                let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+                let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+                let remainingDays = isCurrentMonth ? (daysInMonth - currentDate.getDate() + 1) : daysInMonth;
+
+                let effectiveBalance = currentTotalBalance + simulatedIncome;
+                let remainingToSave = totalUnpaid - effectiveBalance;
+                
+                let saveHtml = '';
+                if (remainingToSave <= 0) {
+                    saveHtml = `
+                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px dashed #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #86efac; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงินจ่ายบิล</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #22c55e;">🎉 ตอนนี้ยอดเงินคงเหลือ${simulatedIncome > 0 ? ' (รวมเงินจำลอง)' : ''} พอจ่ายบิลทั้งหมดแล้วครับ!</div>
+                    </div>`;
+                } else {
+                    let dailySave = remainingToSave / Math.max(1, remainingDays);
+                    saveHtml = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #fca5a5; margin-bottom: 3px;">🎯 เป้าหมายเตรียมเงิน (ขาดเงินอีก ${remainingToSave.toLocaleString('th-TH')} ฿ • เหลือ ${remainingDays} วัน)</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">ต้องเก็บเงินเพิ่มวันละ: ${dailySave.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        ${simulatedIncome > 0 ? `<div style="margin-top: 5px; font-size: 11px; color: #fbbf24;">* กำลังคำนวณโดยรวมเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
+                    </div>`;
+                }
+
+                finalHtml += saveHtml;
+                finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#ef4444;">⏳ ยอดค้างชำระ (${totalUnpaid.toLocaleString('th-TH')} ฿):</h3>` + unpaidHtml + `<br>`;
+            }
+            
+            finalHtml += `<h3 style="font-size:14px; margin-bottom:10px; color:#94a3b8;">✅ ชำระไปแล้ว:</h3>`;
+            if (paidHtml === '') finalHtml += '<div class="empty-state">ยังไม่มีการจ่ายบิลในเดือนนี้</div>';
+            else finalHtml += paidHtml;
+
+            document.getElementById('bills-list').innerHTML = finalHtml;
+        }
+
+        function renderCalendar() {
+            let content = document.getElementById('calendar-content');
+            
+            let daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+            let upToDay = isCurrentMonth ? currentDate.getDate() : daysInMonth;
+
+            let totalUnpaid = 0;
+            currentRecords.forEach(r => {
+                if (r.type === 'รายจ่ายต้องชำระต่อเดือน' && r.status === 'ยังไม่จ่าย') {
+                    totalUnpaid += r.amount;
+                }
+            });
+
+            let currentGapReal = totalUnpaid - currentTotalBalance;
+
+            let dailyS = new Array(upToDay + 1).fill(0);
+            currentRecords.forEach(r => {
+                if (r.status === 'ยังไม่จ่าย') return;
+                let parts = r.date.split('/');
+                let day = parseInt(parts[0]);
+                if (day >= 1 && day <= upToDay) {
+                    if (r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') dailyS[day] += r.amount;
+                    else if (r.type === 'รายจ่าย' || r.type === 'ให้ยืมเงิน') dailyS[day] -= r.amount;
+                }
+            });
+
+            let sumS = 0;
+            for (let i = 1; i <= upToDay; i++) { sumS += dailyS[i]; }
+            
+            let startGap = currentGapReal + sumS;
+            if (startGap < 0) startGap = 0;
+
+            let calendarData = [];
+            let currentRunningGap = startGap;
+
+            for (let i = 1; i <= upToDay; i++) {
+                let remainingDaysAtStartOfDay = daysInMonth - i + 1;
+                let targetForDay = currentRunningGap > 0 ? currentRunningGap / remainingDaysAtStartOfDay : 0;
+                
+                let actualS = dailyS[i];
+                let newGap = currentRunningGap - actualS;
+                if (newGap < 0) newGap = 0;
+                
+                let effectiveNewGap = newGap;
+                if (i === upToDay) {
+                    effectiveNewGap -= simulatedIncome;
+                    if (effectiveNewGap < 0) effectiveNewGap = 0;
+                }
+                
+                let nextRemainingDays = daysInMonth - i;
+                let nextTarget = (effectiveNewGap > 0 && nextRemainingDays > 0) ? effectiveNewGap / nextRemainingDays : 0;
+                
+                let diff = actualS - targetForDay;
+                
+                calendarData.push({
+                    day: i,
+                    target: targetForDay,
+                    actual: actualS,
+                    diff: diff,
+                    nextTarget: nextTarget,
+                    isPast: i < upToDay,
+                    isToday: i === upToDay
+                });
+                
+                currentRunningGap = newGap;
+            }
+
+            let displayGap = currentGapReal - simulatedIncome;
+            if (displayGap < 0) displayGap = 0;
+
+            let nextTargetTommorow = displayGap > 0 ? displayGap / Math.max(1, daysInMonth - upToDay) : 0;
+            if (daysInMonth - upToDay <= 0) nextTargetTommorow = 0; 
+
+            let demoHtml = `
+            <div style="background: #1e293b; border: 1px dashed #3b82f6; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #60a5fa;">🔮 โหมดจำลองรายรับล่วงหน้า</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="demo-income-input-cal" placeholder="จำลองรายรับ..." style="flex:1; padding: 10px; border-radius: 8px; border: none; background: #0B192C; color: white;" value="${simulatedIncome > 0 ? simulatedIncome : ''}">
+                    <button onclick="applySimulation('calendar')" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">จำลอง</button>
+                    ${simulatedIncome > 0 ? `<button onclick="clearSimulation()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">ล้าง</button>` : ''}
+                </div>
+                ${simulatedIncome > 0 ? `<div style="font-size: 11px; color: #fbbf24; margin-top: 10px;">* คำนวณเป้าหมายถัดไปโดยหักลบเงินจำลอง ${simulatedIncome.toLocaleString('th-TH')} ฿ แล้ว</div>` : ''}
+            </div>`;
+
+            let summaryHtml = `
+                <div class="insight-box" style="background: linear-gradient(135deg, #0284c7, #2563eb); box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);">
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 5px; color: #e0f2fe;">🎯 สถานะเป้าหมายปัจจุบัน</div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+                        <div>
+                            <div style="font-size: 12px; color: #bae6fd;">ยอดเงินที่ยังขาด${simulatedIncome > 0 ? ' (หลังจำลอง)' : ''}</div>
+                            <div style="font-size: 24px; font-weight: 700;">${displayGap > 0 ? displayGap.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0'} ฿</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 12px; color: #bae6fd;">เป้าหมายที่ต้องเก็บ${isCurrentMonth ? 'พรุ่งนี้' : 'ต่อวัน'}</div>
+                            <div style="font-size: 18px; font-weight: 700; color: #fde047;">${displayGap > 0 ? nextTargetTommorow.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0'} ฿/วัน</div>
+                        </div>
+                    </div>
+                    ${displayGap <= 0 ? '<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">🎉 ยินดีด้วย! คุณมีเงินพอจ่ายบิลทั้งหมดแล้ว</div>' : `<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; font-size: 13px; text-align: center;">เหลือเวลาอีก ${daysInMonth - upToDay} วัน ในเดือนนี้</div>`}
+                </div>
+                <div style="font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #cbd5e1;">ประวัติการเก็บเงินรายวัน (เดือนนี้)</div>
+            `;
+
+            let listHtml = '';
+            
+            calendarData.reverse().forEach(d => {
+                let statusColor = d.diff >= 0 ? '#22c55e' : '#ef4444';
+                let statusIcon = d.diff >= 0 ? '🟢 ทะลุเป้า' : '🔴 พลาดเป้า';
+                let diffAbs = Math.abs(d.diff).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                let diffText = d.target > 0 ? `${statusIcon} (${d.diff >= 0 ? '+' : '-'}${diffAbs})` : 'เป้าหมายสำเร็จแล้ว';
+                
+                if (d.target === 0 && d.actual === 0 && d.diff === 0) {
+                     statusColor = '#94a3b8';
+                     diffText = '-';
+                }
+
+                listHtml += `
+                <div style="background: #11223A; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 4px solid ${statusColor};">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 8px;">
+                        <div style="font-weight: bold; color: ${d.isToday && isCurrentMonth ? '#facc15' : 'white'};">${d.isToday && isCurrentMonth ? 'วันนี้' : `วันที่ ${d.day}`}</div>
+                        <div style="font-size: 12px; color: #94a3b8;">เป้า: ${d.target.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <div style="font-size: 13px; color: #cbd5e1;">เก็บได้จริง:</div>
+                        <div style="font-size: 18px; font-weight: bold; color: ${d.actual >= 0 ? '#22c55e' : '#ef4444'};">${d.actual > 0 ? '+' : ''}${d.actual.toLocaleString('th-TH')} ฿</div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                        <div style="color: ${statusColor};">${diffText}</div>
+                        ${d.isPast && currentGapReal > 0 ? `<div style="color: #64748b;">เป้าถัดไปปรับเป็น ${d.nextTarget.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ฿</div>` : ''}
+                        ${d.isToday && isCurrentMonth && displayGap > 0 ? `<div style="color: #facc15;">เป้าพรุ่งนี้ ${d.nextTarget.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ฿</div>` : ''}
+                    </div>
+                </div>`;
+            });
+
+            content.innerHTML = demoHtml + summaryHtml + listHtml;
+        }
+
+        function renderSummary() {
+            let expensesByCategory = {};
+            let totalExp = 0;
+            let totalInc = 0;
+            let totalGeneralExp = 0; 
+
+            currentRecords.forEach(r => {
+                if(r.status === 'ยังไม่จ่าย') return; 
+
+                if(r.type.includes('รายจ่าย') || r.type === 'ให้ยืมเงิน') {
+                    const cat = r.category || 'ไม่ระบุ';
+                    if (r.type === 'รายจ่าย') {
+                        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
+                        totalGeneralExp += r.amount;
+                    }
+                    totalExp += r.amount;
+                } else if(r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') {
+                    totalInc += r.amount;
+                }
+            });
+
+            let sortedCats = Object.entries(expensesByCategory).sort((a,b) => b[1] - a[1]);
+            let insightHtml = '';
+            let barsHtml = '';
+
+            let maxVal = Math.max(totalInc, totalExp);
+            let incWidth = maxVal > 0 ? (totalInc / maxVal) * 100 : 0;
+            let expWidth = maxVal > 0 ? (totalExp / maxVal) * 100 : 0;
+            
+            let daysInMonthSummary = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+            let isCurrentMonth = (viewDate.getMonth() === currentDate.getMonth() && viewDate.getFullYear() === currentDate.getFullYear());
+            let daysDivisor = isCurrentMonth ? currentDate.getDate() : daysInMonthSummary;
+            
+            let avgDailyExpTotal = totalExp / Math.max(1, daysDivisor);
+            let avgDailyExpGeneral = totalGeneralExp / Math.max(1, daysDivisor);
+
+            let comparisonHtml = `
+                <div class="insight-box" style="background: #11223A; box-shadow: none; border: 1px solid #1e293b;">
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 15px; color: white;">⚖️ ภาพรวมเดือนนี้</div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
+                            <span style="color: #22c55e;">รายรับ</span>
+                            <span style="color: #22c55e; font-weight: 600;">+${totalInc.toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="background-color: #22c55e; height: 100%; border-radius: 5px; width: ${incWidth}%; transition: width 0.8s ease-out;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
+                            <span style="color: #ef4444;">รายจ่าย (รวมบิล+ให้ยืม)</span>
+                            <span style="color: #ef4444; font-weight: 600;">-${totalExp.toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="background-color: #ef4444; height: 100%; border-radius: 5px; width: ${expWidth}%; transition: width 0.8s ease-out;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="background-color: #1e293b; padding: 12px; border-radius: 8px; margin-top: 18px; display: flex; justify-content: space-between; align-items: center; text-align: center;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">เฉลี่ยรวม (หาร ${daysDivisor} วัน)</div>
+                            <div style="font-size: 18px; font-weight: 700; color: #facc15;">${avgDailyExpTotal.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        </div>
+                        <div style="width: 1px; height: 35px; background-color: #334155; margin: 0 10px;"></div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">ใช้จ่ายรายวัน <span style="color:#38bdf8;">(ไม่รวมบิล)</span></div>
+                            <div style="font-size: 18px; font-weight: 700; color: #38bdf8;">${avgDailyExpGeneral.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if(totalGeneralExp === 0) {
+                insightHtml = `เดือนนี้คุณยังไม่มีการใช้จ่ายเลยครับ ดีเยี่ยมมากๆ! 🎉`;
+                barsHtml = `<div class="empty-state">ยังไม่มีข้อมูลการใช้จ่าย</div>`;
+            } else {
+                const topCat = sortedCats[0];
+                const percentTop = Math.round((topCat[1] / totalGeneralExp) * 100);
+                
+                let warning = '';
+                if(totalInc > 0 && totalExp > totalInc) warning = `<div style="color:#fca5a5; margin-top:8px;">⚠️ ระวัง: เดือนนี้ใช้จ่ายเกินรายรับไปแล้วนะ!</div>`;
+                else if (totalInc > 0 && totalExp <= (totalInc * 0.5)) warning = `<div style="color:#86efac; margin-top:8px;">✨ ยอดเยี่ยม: ใช้เงินไม่ถึงครึ่งของรายรับ มีเงินเก็บแน่นอน!</div>`;
+
+                insightHtml = `คุณหมดเงินไปกับ <b>${topCat[0]}</b> เยอะที่สุด คิดเป็น <b>${percentTop}%</b> ของรายจ่ายทั้งหมด ${warning}`;
+
+                barsHtml = sortedCats.map(item => {
+                    const percent = Math.round((item[1] / totalGeneralExp) * 100);
+                    
+                    let divisorToUse = daysDivisor;
+                    if (billCategories.includes(item[0])) {
+                        divisorToUse = daysInMonthSummary;
+                    }
+                    
+                    const catDailyAvg = item[1] / Math.max(1, divisorToUse);
+                    
+                    return `
+                    <div class="cat-item">
+                        <div class="cat-header">
+                            <span style="font-weight: 500;">
+                                ${item[0]} 
+                                <span style="font-size: 11px; color: #94a3b8; font-weight: normal; margin-left: 5px;">
+                                    (เฉลี่ย ${catDailyAvg.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿/วัน)
+                                </span>
+                            </span>
+                            <span style="color: #f8fafc;">${item[1].toLocaleString('th-TH')} ฿</span>
+                        </div>
+                        <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: ${percent}%;"></div></div>
+                    </div>`;
+                }).join('');
+            }
+
+            let accountBalancesHtml = `
+                <div class="insight-box" style="background: #0B192C; border: 1px solid #1e293b; padding-bottom: 5px;">
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 15px; color: white;">💰 ยอดเงินคงเหลือแต่ละบัญชี</div>
+            `;
+            let hasAccounts = false;
+            for (const [acc, bal] of Object.entries(currentAccountBalances)) {
+                hasAccounts = true;
+                let color = bal >= 0 ? '#22c55e' : '#ef4444';
+                accountBalancesHtml += `
+                    <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed #1e293b;">
+                        <span style="color: #cbd5e1;">${acc}</span>
+                        <span style="color: ${color}; font-weight: 600;">${bal.toLocaleString('th-TH')} ฿</span>
+                    </div>
+                `;
+            }
+            if (!hasAccounts) {
+                accountBalancesHtml += `<div class="empty-state" style="padding: 10px 0;">ยังไม่มีข้อมูลบัญชี</div>`;
+            }
+            accountBalancesHtml += `</div>`;
+
+            document.getElementById('summary-content').innerHTML = `
+                ${accountBalancesHtml}
+                ${comparisonHtml}
+                <div class="insight-box" style="background: linear-gradient(135deg, #1e40af, #3b82f6); box-shadow: 0 4px 15px rgba(59,130,246,0.3);">
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">💡 วิเคราะห์พฤติกรรม</div>
+                    <div style="font-size: 14px; line-height: 1.5; font-weight: 300;">${insightHtml}</div>
+                </div>
+                <h3 style="font-size:16px; margin-bottom:15px; color:#94a3b8;">หมวดหมู่ยอดฮิต</h3>
+                <div>${barsHtml}</div>
+            `;
+            
+            setTimeout(() => {
+                const bars = document.querySelectorAll('.cat-bar-fill');
+                bars.forEach(bar => {
+                    const w = bar.style.width;
+                    bar.style.width = '0%';
+                    setTimeout(() => { bar.style.width = w; }, 50);
+                });
+            }, 100);
+        }
+
+        updateDateDisplay();
+
         let currentType = 'expense';
-
-        // ใส่วันที่ปัจจุบัน
-        const dateOptions = {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            year: '2-digit'
-        };
-        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('th-TH', dateOptions);
-
         function switchTab(type, element) {
             currentType = type;
-
-            // เปลี่ยน Active Tab
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             element.classList.add('active');
 
-            // จัดการสีไอคอนลูกศร
             const icon = document.getElementById('typeIcon');
             const catBox = document.getElementById('categoryBox');
-            const tNote = document.getElementById('transferNote');
+            const accBox = document.getElementById('accountBox'); 
+            const transBox = document.getElementById('transferAccountBox'); 
+            const sBox = document.getElementById('statusBox');
+            const dActionBox = document.getElementById('debtorActionBox');
+            const dNameBox = document.getElementById('debtorNameBox');
 
-            icon.className = 'amount-icon'; // reset class
+            icon.className = 'amount-icon'; 
+            sBox.style.display = 'none';
+            dActionBox.style.display = 'none';
+            dNameBox.style.display = 'none';
 
-            if (type === 'expense') {
-                icon.innerText = '↑';
-                icon.classList.add('color-expense');
-                catBox.style.display = 'flex';
-                tNote.style.display = 'none';
-                updateCategoryOptions('expense');
-            } else if (type === 'income') {
-                icon.innerText = '↓';
-                icon.classList.add('color-income');
-                catBox.style.display = 'flex';
-                tNote.style.display = 'none';
-                updateCategoryOptions('income');
-            } else if (type === 'transfer') {
+            if (type === 'transfer') {
                 icon.innerText = '⇄';
                 icon.classList.add('color-transfer');
-                catBox.style.display = 'none'; // ซ่อนหมวดหมู่เวลาย้ายเงิน
-                tNote.style.display = 'block';
+                catBox.style.display = 'none';
+                accBox.style.display = 'none';
+                transBox.style.display = 'flex';
+            } else if (type === 'debtor') {
+                icon.innerText = '🤝';
+                icon.classList.add('color-debt');
+                catBox.style.display = 'none';
+                accBox.style.display = 'flex';
+                transBox.style.display = 'none';
+                dActionBox.style.display = 'flex';
+                dNameBox.style.display = 'flex';
+            } else {
+                catBox.style.display = 'flex';
+                accBox.style.display = 'flex';
+                transBox.style.display = 'none';
+                
+                if (type === 'expense') {
+                    icon.innerText = '↑';
+                    icon.classList.add('color-expense');
+                    updateCategoryOptions('expense');
+                } else if (type === 'income') {
+                    icon.innerText = '↓';
+                    icon.classList.add('color-income');
+                    updateCategoryOptions('income');
+                } else if (type === 'bill') {
+                    icon.innerText = '🧾';
+                    icon.classList.add('color-bill');
+                    sBox.style.display = 'flex'; 
+                    updateCategoryOptions('bill');
+                    toggleBillAccountBox();
+                }
+            }
+        }
+
+        function toggleBillAccountBox() {
+            const status = document.getElementById('billStatus').value;
+            const accBox = document.getElementById('accountBox');
+            if (status === 'ยังไม่จ่าย') {
+                accBox.style.display = 'none';
+            } else {
+                accBox.style.display = 'flex';
             }
         }
 
@@ -324,27 +1105,93 @@
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
                     <option value="อาหาร">🍔 อาหาร</option>
                     <option value="เดินทาง">🚗 เดินทาง</option>
+                    <option value="BTS">🚆 BTS</option>
                     <option value="ช้อปปิ้ง">🛍️ ช้อปปิ้ง</option>
-                    <option value="รายจ่ายต้องชำระต่อเดือน">บิลรายเดือน</option>
                     <option value="ทั่วไป">ทั่วไป</option>`;
-            } else {
+            } else if (type === 'income') {
                 select.innerHTML = `
                     <option value="" disabled selected>เลือกหมวดหมู่ / แท็ก</option>
                     <option value="เงินเดือน">💰 เงินเดือน</option>
-                    <option value="จากพ่อแม่">พ่อแม่</option>
+                    <option value="จากพ่อ">👨 จากพ่อ</option>
+                    <option value="จากแม่">👩 จากแม่</option>
                     <option value="อื่นๆ">อื่นๆ</option>`;
+            } else if (type === 'bill') {
+                select.innerHTML = `
+                    <option value="" disabled selected>เลือกบิล</option>
+                    <option value="ShopeePay">🧡 ShopeePay</option>
+                    <option value="SEasyCash">💸 SEasyCash</option>
+                    <option value="SPayExtra">💳 SPayExtra</option>
+                    <option value="Internet">🌐 Internet</option>
+                    <option value="ค่าทำฟัน">🦷 ค่าทำฟัน</option>
+                    <option value="ประกันสังคม">🏥 ประกันสังคม</option>
+                    <option value="บิลอื่นๆ">บิลอื่นๆ</option>`;
             }
         }
 
-        function saveRecord() {
+        async function saveRecord() {
             const amount = document.getElementById('amount').value;
-            if (!amount) {
-                alert("กรุณาใส่จำนวนเงินครับ!");
-                return;
+            const note = document.getElementById('note').value;
+            
+            let payload = { type: currentType, amount: amount, note: note };
+
+            if(!amount) { alert("⚠️ กรุณาใส่จำนวนเงินด้วยครับ!"); return; }
+
+            if (currentType === 'transfer') {
+                const srcAcc = document.getElementById('sourceAccount').value;
+                const destAcc = document.getElementById('destinationAccount').value;
+                if(!srcAcc || !destAcc) { alert("⚠️ กรุณาเลือกบัญชีต้นทางและปลายทางให้ครบครับ!"); return; }
+                if(srcAcc === destAcc) { alert("⚠️ บัญชีต้นทางและปลายทางต้องไม่เหมือนกันครับ!"); return; }
+                
+                payload.sourceAccount = srcAcc;
+                payload.destinationAccount = destAcc;
+            } else if (currentType === 'debtor') {
+                payload.type = document.getElementById('debtorAction').value; 
+                const dName = document.getElementById('debtorName').value.trim();
+                const acc = document.getElementById('account').value;
+                if(!dName) { alert("⚠️ กรุณาพิมพ์ชื่อคนยืมด้วยครับ!"); return; }
+                if(!acc) { alert("⚠️ กรุณาเลือกบัญชีด้วยครับ!"); return; }
+                
+                payload.category = dName;
+                payload.account = acc;
+                payload.status = "-";
+            } else {
+                const cat = document.getElementById('category').value;
+                const acc = document.getElementById('account').value;
+                
+                if(!cat) { alert("⚠️ กรุณาเลือกหมวดหมู่ด้วยครับ!"); return; }
+                
+                const statusVal = currentType === 'bill' ? document.getElementById('billStatus').value : '-';
+                if ((currentType !== 'bill' || statusVal === 'จ่ายแล้ว') && !acc) {
+                    alert("⚠️ กรุณาเลือกบัญชีด้วยครับ!"); return; 
+                }
+
+                payload.category = cat;
+                payload.account = acc || '-';
+                payload.status = statusVal;
             }
-            alert(`เตรียมส่งข้อมูล:\nประเภท: ${currentType}\nยอดเงิน: ${amount}\nรอเชื่อมต่อกับ Backend ในสเตปถัดไป!`);
+
+            showToast("⏳ กำลังบันทึกเบื้องหลัง...");
+            openHome(true); 
+            
+            document.getElementById('amount').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('account').value = '';
+            document.getElementById('note').value = '';
+            document.getElementById('debtorName').value = '';
+
+            fetch('/api/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(res => res.json()).then(result => {
+                if(result.status === 'success') {
+                    showToast("✅ บันทึกและอัปเดตข้อมูลสำเร็จ");
+                    fetchMonthData(true); 
+                } else {
+                    showToast('❌ ' + result.message, true);
+                }
+            }).catch(e => { showToast('❌ ขาดการเชื่อมต่อ', true); });
         }
     </script>
 </body>
-
 </html>
