@@ -79,23 +79,26 @@
             display: flex; position: absolute; bottom: 0; left: 0; right: 0; width: 100%; 
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 40; transition: transform 0.3s ease; 
         }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 12px; cursor: pointer; transition: 0.2s; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 11px; cursor: pointer; transition: 0.2s; }
         .nav-item.active { color: #0066FF; font-weight: 600; }
         .nav-item:active { transform: scale(0.9); }
-        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; transition: 0.2s; }
+        .nav-item svg { width: 22px; height: 22px; margin-bottom: 2px; stroke: currentColor; fill: none; stroke-width: 2; transition: 0.2s; }
 
         .top-bar { background-color: #FACC15; padding: env(safe-area-inset-top, 20px) 15px 0 15px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 0 0 15px 15px; }
         .close-btn { font-size: 16px; color: #1e293b; font-weight: 700; cursor: pointer; padding-bottom: 12px; margin-right: 15px; transition: 0.2s; }
         .close-btn:active { opacity: 0.5; }
 
-        .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow: hidden; margin-bottom: -1px; width: 100%; }
-        .tab { flex: 1; padding: 10px 5px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        /* 🌟 ปรับให้เมนูเลื่อนซ้ายขวาได้ */
+        .tabs { display: flex; background: rgba(255,255,255,0.2); border-radius: 10px 10px 0 0; overflow-x: auto; margin-bottom: -1px; width: 100%; white-space: nowrap; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab { flex: 0 0 auto; padding: 12px 15px; text-align: center; color: #1e293b; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.3s; }
         .tab.active { background-color: #0B192C; color: white; border-radius: 10px 10px 0 0; }
+        
         .content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
         
         .amount-box { background-color: #11223A; border-radius: 15px; padding: 20px; display: flex; align-items: center; gap: 15px; }
         .amount-icon { font-size: 30px; font-weight: bold; }
-        .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; } .color-bill { color: #f97316; }
+        .color-expense { color: #ef4444; } .color-income { color: #22c55e; } .color-transfer { color: #eab308; } .color-bill { color: #f97316; } .color-debt { color: #8b5cf6; }
         .amount-input { background: transparent; border: none; outline: none; color: white; font-size: 40px; width: 100%; font-weight: 300; }
         .amount-input::placeholder { color: #475569; }
         .currency { color: #475569; font-size: 30px; font-weight: 300; }
@@ -158,8 +161,25 @@
             <div class="empty-state">กำลังโหลดปฏิทิน... ⏳</div>
         </div>
     </div>
+    
+    <!-- 🌟 3. หน้าคนยืมเงิน -->
+    <div id="debtors-page" class="page">
+        <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
+            <div style="font-size:18px; font-weight:bold; color:#1e293b;">🤝 คนยืมเงิน (ลูกหนี้)</div>
+        </div>
+        <div class="content">
+            <div class="insight-box" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); box-shadow: 0 4px 15px rgba(99,102,241,0.3);">
+                <div class="insight-title" style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">ยอดเงินที่คนอื่นยืมไปรวม</div>
+                <div style="font-size: 36px; font-weight: 700;" id="debtors-total">... ฿</div>
+            </div>
+            <button class="save-btn" style="margin-top: 0px; margin-bottom: 20px; background-color: #0066FF;" onclick="openFormWithDebtor()">
+                + จดให้ยืม/ได้คืน
+            </button>
+            <div id="debtors-list"></div>
+        </div>
+    </div>
 
-    <!-- 3. หน้าบิลรายเดือน -->
+    <!-- 4. หน้าบิลรายเดือน -->
     <div id="bills-page" class="page">
         <div class="top-bar" style="justify-content: center; padding-bottom: 15px;">
             <div style="font-size:18px; font-weight:bold; color:#1e293b;">📋 บิลรายเดือน</div>
@@ -176,7 +196,7 @@
         </div>
     </div>
 
-    <!-- 4. หน้าสรุป -->
+    <!-- 5. หน้าสรุป -->
     <div id="summary-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">‹ กลับ</div>
@@ -186,7 +206,7 @@
         <div class="content" id="summary-content"></div>
     </div>
 
-    <!-- 5. หน้าฟอร์ม -->
+    <!-- 6. หน้าฟอร์ม -->
     <div id="form-page" class="page">
         <div class="top-bar">
             <div class="close-btn" onclick="openHome()">ยกเลิก</div>
@@ -195,6 +215,7 @@
                 <div class="tab" onclick="switchTab('income', this)">รายรับ</div>
                 <div class="tab" onclick="switchTab('transfer', this)">ย้ายเงิน</div>
                 <div class="tab" onclick="switchTab('bill', this)">บิล</div>
+                <div class="tab" onclick="switchTab('debtor', this)">ลูกหนี้</div>
             </div>
         </div>
         <div class="content">
@@ -207,7 +228,7 @@
             
             <div class="form-box" id="accountBox">
                 <select id="account">
-                    <option value="" disabled selected>เลือกบัญชีที่ใช้จ่าย</option>
+                    <option value="" disabled selected>เลือกบัญชีที่ใช้เงิน</option>
                     <option value="กสิกร">🟢 กสิกร</option>
                     <option value="กรุงไทย">🔵 กรุงไทย</option>
                     <option value="TrueMoney">🟠 TrueMoney</option>
@@ -247,6 +268,17 @@
                     <option value="จ่ายแล้ว">✅ จ่ายแล้ว</option>
                 </select>
             </div>
+            
+            <!-- 🌟 ตัวเลือกสำหรับลูกหนี้ -->
+            <div class="form-box" id="debtorActionBox" style="display: none;">
+                <select id="debtorAction" style="color: #8b5cf6; font-weight: bold;">
+                    <option value="lend">📤 ให้เพื่อนยืมเงิน</option>
+                    <option value="repay">📥 เพื่อนคืนเงินให้แล้ว</option>
+                </select>
+            </div>
+            <div class="form-box" id="debtorNameBox" style="display: none;">
+                <input type="text" id="debtorName" placeholder="พิมพ์ชื่อคนยืม (เช่น นัท, สมชาย)">
+            </div>
 
             <div class="form-box">
                 <input type="text" id="note" placeholder="เพิ่มโน้ต">
@@ -273,6 +305,10 @@
             <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
             ปฏิทิน
         </div>
+        <div class="nav-item" id="nav-debtors" onclick="openDebtors()">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            คนยืม
+        </div>
         <div class="nav-item" id="nav-bills" onclick="openBills()">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             บิลรายเดือน
@@ -288,6 +324,7 @@
         let viewDate = new Date(); 
         let currentRecords = [];
         let currentAccountBalances = {};
+        let currentDebtors = {}; // เก็บข้อมูลลูกหนี้
         let currentTotalBalance = 0; 
         let simulatedIncome = 0;
 
@@ -301,39 +338,40 @@
         }
 
         function hideAllPages() { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); }
+        function deactivateAllNavs() { document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); }
 
         function openHome(silent = false) {
-            hideAllPages();
+            hideAllPages(); deactivateAllNavs();
             document.getElementById('home-page').classList.add('active');
             document.getElementById('main-nav').style.transform = 'translateY(0)';
             document.getElementById('fab-button').style.display = 'flex';
-            
             document.getElementById('nav-home').classList.add('active');
-            document.getElementById('nav-calendar').classList.remove('active');
-            document.getElementById('nav-bills').classList.remove('active');
             if(!silent) fetchMonthData(); 
         }
 
         function openCalendar() {
-            hideAllPages();
+            hideAllPages(); deactivateAllNavs();
             document.getElementById('calendar-page').classList.add('active');
             document.getElementById('main-nav').style.transform = 'translateY(0)';
             document.getElementById('fab-button').style.display = 'flex'; 
-            
-            document.getElementById('nav-home').classList.remove('active');
             document.getElementById('nav-calendar').classList.add('active');
-            document.getElementById('nav-bills').classList.remove('active');
             renderCalendar(); 
         }
 
+        function openDebtors() {
+            hideAllPages(); deactivateAllNavs();
+            document.getElementById('debtors-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('fab-button').style.display = 'flex'; 
+            document.getElementById('nav-debtors').classList.add('active');
+            renderDebtors(); 
+        }
+
         function openBills() {
-            hideAllPages();
+            hideAllPages(); deactivateAllNavs();
             document.getElementById('bills-page').classList.add('active');
             document.getElementById('main-nav').style.transform = 'translateY(0)';
             document.getElementById('fab-button').style.display = 'flex'; 
-            
-            document.getElementById('nav-home').classList.remove('active');
-            document.getElementById('nav-calendar').classList.remove('active');
             document.getElementById('nav-bills').classList.add('active');
             renderBills(); 
         }
@@ -360,6 +398,14 @@
             document.getElementById('main-nav').style.transform = 'translateY(100%)';
             document.getElementById('fab-button').style.display = 'none';
             switchTab('bill', document.querySelectorAll('.tab')[3]); 
+        }
+        
+        function openFormWithDebtor() {
+            hideAllPages();
+            document.getElementById('form-page').classList.add('active');
+            document.getElementById('main-nav').style.transform = 'translateY(100%)';
+            document.getElementById('fab-button').style.display = 'none';
+            switchTab('debtor', document.querySelectorAll('.tab')[4]); 
         }
 
         function payUnpaidBill(categoryName, amountVal) {
@@ -461,6 +507,7 @@
         function updateUIWithData(data, monthStr) {
             currentRecords = data.records || []; 
             currentAccountBalances = data.account_balances || {};
+            currentDebtors = data.debtors || {}; // รับข้อมูลลูกหนี้
             currentTotalBalance = data.total_balance || 0; 
             
             document.getElementById('displayTotalBalance').innerText = currentTotalBalance.toLocaleString('th-TH') + ' ฿';
@@ -474,6 +521,8 @@
                 renderSummary();
             } else if (document.getElementById('calendar-page').classList.contains('active')) {
                 renderCalendar();
+            } else if (document.getElementById('debtors-page').classList.contains('active')) {
+                renderDebtors();
             }
         }
 
@@ -489,8 +538,8 @@
             const grouped = {};
             validRecords.forEach(r => {
                 if (!grouped[r.date]) grouped[r.date] = { expense: 0, income: 0, items: [] };
-                if (r.type.includes('รายจ่าย')) grouped[r.date].expense += r.amount;
-                if (r.type === 'รายรับ') grouped[r.date].income += r.amount;
+                if (r.type.includes('รายจ่าย') || r.type === 'ให้ยืมเงิน') grouped[r.date].expense += r.amount;
+                if (r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') grouped[r.date].income += r.amount;
                 grouped[r.date].items.push(r);
             });
 
@@ -517,7 +566,6 @@
                             ${g.income > 0 ? `<span style="color:#22c55e;">↑ รับ ${g.income.toLocaleString('th-TH')}</span>` : ''}
                         </div>
                         ${g.items.slice().reverse().map(item => { 
-                            // 🌟 ย้ายเวลามาต่อท้ายชื่อหมวดหมู่ (Transaction-Cat)
                             let timeText = item.time ? ` (${item.time.substring(0, 5)} น.)` : '';
                             let displayCat = item.category + timeText;
                             
@@ -526,16 +574,26 @@
                             if (item.note !== '-') subParts.push(`(${item.note})`);
                             let displaySub = subParts.join(' ');
 
+                            let isExpense = item.type.includes('รายจ่าย') || item.type === 'ให้ยืมเงิน';
+                            let isIncome = item.type === 'รายรับ' || item.type === 'ได้คืนจากลูกหนี้';
+                            let typeColor = isExpense ? '#ef4444' : (isIncome ? '#22c55e' : '#eab308');
+                            let sign = isExpense ? '-' : (isIncome ? '+' : '');
+
                             if (item.type === 'ย้ายเงิน') {
                                 displayCat = '🔄 ย้ายเงิน' + timeText;
                                 displaySub = `${item.account} ➡️ ${item.category} ${item.note !== '-' ? `(${item.note})` : ''}`;
+                            } else if (item.type === 'ให้ยืมเงิน') {
+                                displayCat = '📤 ให้ยืม: ' + item.category + timeText;
+                            } else if (item.type === 'ได้คืนจากลูกหนี้') {
+                                displayCat = '📥 ได้คืนจาก: ' + item.category + timeText;
                             }
+
                             return `
                             <div class="transaction-item">
                                 <div><div class="transaction-cat">${displayCat}</div><div class="transaction-sub">${displaySub}</div></div>
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="color:${item.type.includes('รายจ่าย') ? '#ef4444' : (item.type === 'รายรับ' ? '#22c55e' : '#eab308')}; font-weight:600;">
-                                        ${item.type.includes('รายจ่าย') ? '-' : (item.type === 'รายรับ' ? '+' : '')}${item.amount.toLocaleString('th-TH')}
+                                    <div style="color:${typeColor}; font-weight:600;">
+                                        ${sign}${item.amount.toLocaleString('th-TH')}
                                     </div>
                                     <button class="delete-btn" onclick="deleteRecord('${item.date}', ${item.amount}, '${item.category}', '${monthStr}')" title="ลบรายการ">🗑️</button>
                                 </div>
@@ -545,6 +603,40 @@
                 </div>`;
             });
             container.innerHTML = html;
+        }
+
+        // 🌟 ฟังก์ชันเรนเดอร์หน้าลูกหนี้
+        function renderDebtors() {
+            let totalOwed = 0;
+            let html = '';
+            
+            let sortedDebtors = Object.entries(currentDebtors)
+                                .filter(d => d[1] > 0)
+                                .sort((a,b) => b[1] - a[1]);
+            
+            sortedDebtors.forEach(d => {
+                totalOwed += d[1];
+                html += `
+                <div class="form-box" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #8b5cf6;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="background: #8b5cf6; padding: 10px; border-radius: 10px; font-size:18px;">👤</div>
+                        <div>
+                            <div style="font-weight: 500; font-size:14px; color: white;">${d[0]}</div>
+                            <div style="font-size: 12px; color: #94a3b8;">ยอดค้างชำระทั้งหมด</div>
+                        </div>
+                    </div>
+                    <div style="color: #facc15; font-weight: 600; font-size: 16px;">
+                        ${d[1].toLocaleString('th-TH')} ฿
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('debtors-total').innerText = totalOwed.toLocaleString('th-TH') + ' ฿';
+            
+            if (html === '') {
+                html = '<div class="empty-state">ไม่มีใครยืมเงินคุณเลย 🎉</div>';
+            }
+            document.getElementById('debtors-list').innerHTML = html;
         }
 
         function renderBills() {
@@ -667,8 +759,8 @@
                 let parts = r.date.split('/');
                 let day = parseInt(parts[0]);
                 if (day >= 1 && day <= upToDay) {
-                    if (r.type === 'รายรับ') dailyS[day] += r.amount;
-                    else if (r.type === 'รายจ่าย') dailyS[day] -= r.amount;
+                    if (r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') dailyS[day] += r.amount;
+                    else if (r.type === 'รายจ่าย' || r.type === 'ให้ยืมเงิน') dailyS[day] -= r.amount;
                 }
             });
 
@@ -793,15 +885,14 @@
             currentRecords.forEach(r => {
                 if(r.status === 'ยังไม่จ่าย') return; 
 
-                if(r.type.includes('รายจ่าย')) {
+                if(r.type.includes('รายจ่าย') || r.type === 'ให้ยืมเงิน') {
                     const cat = r.category || 'ไม่ระบุ';
-                    expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
-                    totalExp += r.amount;
-                    
                     if (r.type === 'รายจ่าย') {
+                        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + r.amount;
                         totalGeneralExp += r.amount;
                     }
-                } else if(r.type === 'รายรับ') {
+                    totalExp += r.amount;
+                } else if(r.type === 'รายรับ' || r.type === 'ได้คืนจากลูกหนี้') {
                     totalInc += r.amount;
                 }
             });
@@ -837,7 +928,7 @@
 
                     <div>
                         <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;">
-                            <span style="color: #ef4444;">รายจ่าย (รวมบิล)</span>
+                            <span style="color: #ef4444;">รายจ่าย (รวมบิล+ให้ยืม)</span>
                             <span style="color: #ef4444; font-weight: 600;">-${totalExp.toLocaleString('th-TH')} ฿</span>
                         </div>
                         <div style="background-color: #1e293b; height: 10px; border-radius: 5px; overflow: hidden;">
@@ -859,12 +950,12 @@
                 </div>
             `;
 
-            if(totalExp === 0) {
+            if(totalGeneralExp === 0) {
                 insightHtml = `เดือนนี้คุณยังไม่มีการใช้จ่ายเลยครับ ดีเยี่ยมมากๆ! 🎉`;
                 barsHtml = `<div class="empty-state">ยังไม่มีข้อมูลการใช้จ่าย</div>`;
             } else {
                 const topCat = sortedCats[0];
-                const percentTop = Math.round((topCat[1] / totalExp) * 100);
+                const percentTop = Math.round((topCat[1] / totalGeneralExp) * 100);
                 
                 let warning = '';
                 if(totalInc > 0 && totalExp > totalInc) warning = `<div style="color:#fca5a5; margin-top:8px;">⚠️ ระวัง: เดือนนี้ใช้จ่ายเกินรายรับไปแล้วนะ!</div>`;
@@ -873,7 +964,7 @@
                 insightHtml = `คุณหมดเงินไปกับ <b>${topCat[0]}</b> เยอะที่สุด คิดเป็น <b>${percentTop}%</b> ของรายจ่ายทั้งหมด ${warning}`;
 
                 barsHtml = sortedCats.map(item => {
-                    const percent = Math.round((item[1] / totalExp) * 100);
+                    const percent = Math.round((item[1] / totalGeneralExp) * 100);
                     
                     let divisorToUse = daysDivisor;
                     if (billCategories.includes(item[0])) {
@@ -952,9 +1043,13 @@
             const accBox = document.getElementById('accountBox'); 
             const transBox = document.getElementById('transferAccountBox'); 
             const sBox = document.getElementById('statusBox');
+            const dActionBox = document.getElementById('debtorActionBox');
+            const dNameBox = document.getElementById('debtorNameBox');
 
             icon.className = 'amount-icon'; 
             sBox.style.display = 'none';
+            dActionBox.style.display = 'none';
+            dNameBox.style.display = 'none';
 
             if (type === 'transfer') {
                 icon.innerText = '⇄';
@@ -962,6 +1057,14 @@
                 catBox.style.display = 'none';
                 accBox.style.display = 'none';
                 transBox.style.display = 'flex';
+            } else if (type === 'debtor') {
+                icon.innerText = '🤝';
+                icon.classList.add('color-debt');
+                catBox.style.display = 'none';
+                accBox.style.display = 'flex';
+                transBox.style.display = 'none';
+                dActionBox.style.display = 'flex';
+                dNameBox.style.display = 'flex';
             } else {
                 catBox.style.display = 'flex';
                 accBox.style.display = 'flex';
@@ -1041,6 +1144,16 @@
                 
                 payload.sourceAccount = srcAcc;
                 payload.destinationAccount = destAcc;
+            } else if (currentType === 'debtor') {
+                payload.type = document.getElementById('debtorAction').value; 
+                const dName = document.getElementById('debtorName').value.trim();
+                const acc = document.getElementById('account').value;
+                if(!dName) { alert("⚠️ กรุณาพิมพ์ชื่อคนยืมด้วยครับ!"); return; }
+                if(!acc) { alert("⚠️ กรุณาเลือกบัญชีด้วยครับ!"); return; }
+                
+                payload.category = dName;
+                payload.account = acc;
+                payload.status = "-";
             } else {
                 const cat = document.getElementById('category').value;
                 const acc = document.getElementById('account').value;
@@ -1064,6 +1177,7 @@
             document.getElementById('category').value = '';
             document.getElementById('account').value = '';
             document.getElementById('note').value = '';
+            document.getElementById('debtorName').value = '';
 
             fetch('/api/add', {
                 method: 'POST',
