@@ -1,13 +1,5 @@
-<<<<<<< HEAD
 Flask
 line-bot-sdk
 requests
 gspread
 gunicorn
-=======
-Flask
-line-bot-sdk
-requests
-gspread
-gunicorn
->>>>>>> 8c24e06f12cf3ae67077c30eeed7d43705451987
