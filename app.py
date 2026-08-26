@@ -55,13 +55,24 @@ def api_data():
                 status = row.get('status') if row.get('status') else "จ่ายแล้ว"
                 
                 # เช็คว่าอยู่ในเดือนที่กำลังเลือกดูอยู่หรือไม่ (จากวันที่ DD/MM/YYYY)
+                # เช็คว่าอยู่ในเดือนที่กำลังเลือกดูอยู่หรือไม่ (รองรับทั้งแบบมีเลข 0 และไม่มี)
                 is_target_month = False
                 if date_val:
                     parts = date_val.split('/')
                     if len(parts) >= 3:
-                        row_m_y = f"{parts[1]}/{parts[2][-2:]}"
-                        if row_m_y == month_str:
-                            is_target_month = True
+                        # แปลงเดือนและปีให้เป็นตัวเลขปรกติ เพื่อเทียบกันแบบชัวร์ๆ
+                        try:
+                            r_day = int(parts[0])
+                            r_month = int(parts[1])
+                            r_year = parts[2]
+                            if len(r_year) == 4:
+                                r_year = r_year[-2:] # เอาแค่ 2 ตัวท้าย เช่น "26"
+                            
+                            row_m_y = f"{r_month:02d}/{r_year}"
+                            if row_m_y == month_str:
+                                is_target_month = True
+                        except:
+                            pass
 
                 # คำนวณยอดสะสมแต่ละบัญชี
                 if record_type == "รายรับ":
