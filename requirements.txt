@@ -1,7 +1,4 @@
 Flask==3.0.2
 Flask-Cors==4.0.0
 gunicorn==21.2.0
-supabase==2.3.0
-postgrest==0.10.7
-gotrue==2.3.0
-httpx==0.25.2
+supabase
