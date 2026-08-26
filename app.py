@@ -160,13 +160,14 @@ def api_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # 📝 API เพิ่มข้อมูลลง Supabase
+# 📝 API เพิ่มข้อมูลลง Supabase (บังคับวันที่ให้เป็นรูปแบบ DD/MM/YYYY เสมอ)
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
-    user_id = data.get('user_id', 'admin')
+    user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
     
     now = datetime.now(TH_TZ)
-    date_str = now.strftime("%d/%m/%Y")
+    date_str = now.strftime("%d/%m/%Y") # เช่น "26/08/2026" มีเลข 0 นำหน้าเสมอ วันที่กลุ่มจะไม่แตกแยกอีก
     time_str = now.strftime("%H:%M:%S")
     
     record_type = data.get('type')
@@ -179,14 +180,12 @@ def api_add():
             source_acc = data.get('sourceAccount')
             dest_acc = data.get('destinationAccount')
             
-            # บันทึกฝั่งเงินออก
             supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": "ย้ายเงิน", "amount": amount, "category": dest_acc,
                 "account": source_acc, "note": note, "status": "จ่ายแล้ว"
             }).execute()
         elif record_type in ['lend', 'repay']:
-            # จัดการเรื่องคนยืมเงิน
             t_type = "ให้ยืมเงิน" if record_type == 'lend' else "ได้คืนจากลูกหนี้"
             supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
@@ -206,17 +205,19 @@ def api_add():
         print("API Add Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# 🗑️ API ลบข้อมูล
+# 🗑️ API ลบข้อมูล (รองรับการลบด้วย ID)
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
     data = request.json
-    record_id = data.get('id') # ใช้ ID ในการลบ แม่นยำที่สุด
+    record_id = data.get('id')
     user_id = data.get('user_id', 'admin')
     
     try:
         if record_id:
             supabase.table("transactions").delete().eq("id", record_id).eq("user_id", user_id).execute()
-        return jsonify({"status": "success"})
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "message": "Missing record ID"}), 400
     except Exception as e:
         print("API Delete Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
