@@ -17,7 +17,7 @@ SUPABASE_URL = "https://tmwnszhxbikgjelpskqj.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTM1ODksImV4cCI6MjEwMzMyOTU4OX0.d2w1T00nHf32Ni_wrg_Q7z-zHgwIPlyfdm9gbjlBNZs"
 LINE_CHANNEL_ACCESS_TOKEN = "ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU="
 LINE_CHANNEL_SECRET = "1716fc54190bf6b7177ba7d80d3b07af"
-
+SLIPOK_API_KEY = "slipok-c6e5baef-65de-46a7-a28b-fdc210e528c8"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -45,36 +45,52 @@ def handle_text_message(event):
     )
 
 # 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
+# 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image_message(event):
     message_id = event.message.id
-    user_id = event.source.user_id # ใช้ ID ของคนที่ส่งรูปมา เพื่อบันทึกให้ถูกกระเป๋า
+    user_id = event.source.user_id 
     
     try:
-        # 1. ดึงไฟล์รูปภาพสลิปที่ผู้ใช้ส่งมาจาก LINE
+        # 1. ดึงไฟล์รูปภาพสลิปแบบปลอดภัย (ป้องกัน Error รูปขนาดใหญ่)
         message_content = line_bot_api.get_message_content(message_id)
-        image_bytes = message_content.content
+        image_bytes = b""
+        for chunk in message_content.iter_content():
+            image_bytes += chunk
 
-        # 2. ส่งไฟล์รูปภาพไปตรวจสอบกับ SlipOK API
-        slipok_url = f"slipok-c6e5baef-65de-46a7-a28b-fdc210e528c8"
+        # 2. ตั้งค่า SlipOK
+        # ⚠️ เปลี่ยนตรงนี้เป็น "รหัสสาขา" ของคุณ (ตัวเลขล้วนๆ)
+        SLIPOK_BRANCH_ID = "72439" 
+        
+        slipok_url = f"https://api.slipok.com/api/line/apikey/{SLIPOK_BRANCH_ID}"
         headers = {
-            'x-authorization': SLIPOK_API_KEY
+            'x-authorization': SLIPOK_API_KEY # ตัวแปรนี้ถูกตั้งไว้ด้านบนสุดแล้ว
         }
         files = {
             'files': ('slip.jpg', image_bytes, 'image/jpeg')
         }
         
+        # ส่งรูปไปตรวจสอบ
         response = requests.post(slipok_url, headers=headers, files=files)
+        
+        # เช็คว่า SlipOK ตอบกลับมาปกติไหม (ป้องกันเว็บล่ม)
+        if response.status_code != 200:
+            print(f"SlipOK Error API: {response.text}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"❌ SlipOK ขัดข้อง (Code: {response.status_code})")
+            )
+            return
+
         result = response.json()
 
-        # 3. ตรวจสอบผลลัพธ์ว่าอ่านสลิปสำเร็จหรือไม่
+        # 3. ตรวจสอบผลลัพธ์
         if result.get('success'):
             data = result.get('data', {})
             amount = data.get('amount')
-            sender_name = data.get('sender', {}).get('displayName', 'ไม่ทราบชื่อ')
             receiver_name = data.get('receiver', {}).get('displayName', 'ไม่ทราบชื่อ')
             
-            # บันทึกลง Supabase (ให้เป็นรายจ่ายอัตโนมัติ)
+            # บันทึกลง Supabase
             now = datetime.now(TH_TZ)
             date_str = now.strftime("%d/%m/%Y")
             time_str = now.strftime("%H:%M:%S")
@@ -93,17 +109,16 @@ def handle_image_message(event):
 
             reply_text = f"✅ ตรวจสอบสลิปสำเร็จ!\nโอนให้: {receiver_name}\nยอดเงิน: {amount} บาท\nบันทึกลงบัญชีเรียบร้อยครับ"
         else:
-            # กรณีรูปที่ส่งมาไม่ใช่สลิป หรือ SlipOK อ่านไม่ออก
-            reply_text = "❌ ไม่สามารถอ่านข้อมูลจากสลิปนี้ได้ครับ หรือรูปนี้ไม่ใช่สลิปโอนเงิน"
+            reply_text = "❌ ไม่สามารถอ่านข้อมูลจากสลิปนี้ได้ครับ หรือไม่ใช่สลิปโอนเงิน"
 
-        # ตอบกลับผลลัพธ์กลับไปในแชท LINE
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
     except Exception as e:
-        print("Slip Error:", e)
+        print("Slip Error Detail:", e)
+        # ให้บอทพิมพ์ Error ออกมาในแชทเลย จะได้รู้ว่าบรรทัดไหนพัง
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="❌ ระบบขัดข้อง ไม่สามารถตรวจสลิปได้ครับ")
+            TextSendMessage(text=f"❌ ระบบขัดข้อง: {str(e)}")
         )
 
 @app.route("/")
