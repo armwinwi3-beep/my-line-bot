@@ -38,12 +38,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     text = event.message.text
-    # สามารถทำเมนูหรือคำสั่งพิมพ์ผ่านแชทได้ตรงนี้
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=f"รับทราบครับ คุณพิมพ์ว่า: {text}")
-    )
-
+    # สามารถทำเมนูหรือคำสั่งพิมพ์ผ่านแชทได้ตรงนี้# 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
 # 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
 # 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
 @handler.add(MessageEvent, message=ImageMessage)
@@ -52,28 +47,24 @@ def handle_image_message(event):
     user_id = event.source.user_id 
     
     try:
-        # 1. ดึงไฟล์รูปภาพสลิปแบบปลอดภัย (ป้องกัน Error รูปขนาดใหญ่)
+        # 1. ดึงไฟล์รูปภาพสลิปแบบปลอดภัย
         message_content = line_bot_api.get_message_content(message_id)
         image_bytes = b""
         for chunk in message_content.iter_content():
             image_bytes += chunk
 
         # 2. ตั้งค่า SlipOK
-        # ⚠️ เปลี่ยนตรงนี้เป็น "รหัสสาขา" ของคุณ (ตัวเลขล้วนๆ)
         SLIPOK_BRANCH_ID = "72439" 
-        
         slipok_url = f"https://api.slipok.com/api/line/apikey/{SLIPOK_BRANCH_ID}"
         headers = {
-            'x-authorization': SLIPOK_API_KEY # ตัวแปรนี้ถูกตั้งไว้ด้านบนสุดแล้ว
+            'x-authorization': SLIPOK_API_KEY
         }
         files = {
             'files': ('slip.jpg', image_bytes, 'image/jpeg')
         }
         
-        # ส่งรูปไปตรวจสอบ
         response = requests.post(slipok_url, headers=headers, files=files)
         
-        # เช็คว่า SlipOK ตอบกลับมาปกติไหม (ป้องกันเว็บล่ม)
         if response.status_code != 200:
             print(f"SlipOK Error API: {response.text}")
             line_bot_api.reply_message(
@@ -87,8 +78,15 @@ def handle_image_message(event):
         # 3. ตรวจสอบผลลัพธ์
         if result.get('success'):
             data = result.get('data', {})
-            amount = data.get('amount')
+            raw_amount = data.get('amount', 0)
+            
+            # 🛡️ บังคับให้จำนวนเงินเป็นบวกเสมอ (ป้องกันติดลบ)
+            amount = abs(float(raw_amount))
+            
             receiver_name = data.get('receiver', {}).get('displayName', 'ไม่ทราบชื่อ')
+            
+            # 💡 กำหนดบัญชีเริ่มต้นอัตโนมัติเมื่อโยนสลิป (เช่น "กสิกร" เพื่อให้หักจากยอดเงินคงเหลือทันที)
+            default_account = "กสิกร" 
             
             # บันทึกลง Supabase
             now = datetime.now(TH_TZ)
@@ -102,12 +100,12 @@ def handle_image_message(event):
                 "type": "รายจ่าย", 
                 "amount": amount, 
                 "category": "โอนเงิน",
-                "account": "-", 
-                "note": f"โอนให้ {receiver_name}", 
+                "account": default_account, # บันทึกหักออกจากบัญชีนี้ทันที
+                "note": f"โอนให้ {receiver_name} (สลิป)", 
                 "status": "จ่ายแล้ว"
             }).execute()
 
-            reply_text = f"✅ ตรวจสอบสลิปสำเร็จ!\nโอนให้: {receiver_name}\nยอดเงิน: {amount} บาท\nบันทึกลงบัญชีเรียบร้อยครับ"
+            reply_text = f"✅ ตรวจสอบสลิปสำเร็จ!\nโอนให้: {receiver_name}\nยอดเงิน: {amount:,.2f} บาท\n🏦 หักจากบัญชี: {default_account}\nบันทึกลงบัญชีเรียบร้อยครับ"
         else:
             reply_text = "❌ ไม่สามารถอ่านข้อมูลจากสลิปนี้ได้ครับ หรือไม่ใช่สลิปโอนเงิน"
 
@@ -115,7 +113,6 @@ def handle_image_message(event):
 
     except Exception as e:
         print("Slip Error Detail:", e)
-        # ให้บอทพิมพ์ Error ออกมาในแชทเลย จะได้รู้ว่าบรรทัดไหนพัง
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=f"❌ ระบบขัดข้อง: {str(e)}")
