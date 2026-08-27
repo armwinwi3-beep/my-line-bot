@@ -3,7 +3,11 @@ from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
 from supabase import create_client, Client
-
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageMessage
+import tempfile
+import requests
 app = Flask(__name__)
 CORS(app)
 
@@ -11,10 +15,96 @@ CORS(app)
 # อย่าลืมเปลี่ยน URL และ Key ให้ตรงกับโปรเจกต์ของคุณใน Supabase
 SUPABASE_URL = "https://tmwnszhxbikgjelpskqj.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTM1ODksImV4cCI6MjEwMzMyOTU4OX0.d2w1T00nHf32Ni_wrg_Q7z-zHgwIPlyfdm9gbjlBNZs"
+LINE_CHANNEL_ACCESS_TOKEN = "ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU="
+LINE_CHANNEL_SECRET = "1716fc54190bf6b7177ba7d80d3b07af"
 
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 TH_TZ = timezone(timedelta(hours=7))
+
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        return jsonify({"status": "error", "message": "Invalid signature"}), 400
+    return 'OK'
+
+# 💬 ฟังก์ชันตอบแชทข้อความทั่วไป
+@handler.add(MessageEvent, message=TextMessage)
+def handle_text_message(event):
+    text = event.message.text
+    # สามารถทำเมนูหรือคำสั่งพิมพ์ผ่านแชทได้ตรงนี้
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"รับทราบครับ คุณพิมพ์ว่า: {text}")
+    )
+
+# 🧾 ฟังก์ชันรับรูปภาพ (สลิป) และส่งให้ SlipOK ตรวจสอบ
+@handler.add(MessageEvent, message=ImageMessage)
+def handle_image_message(event):
+    message_id = event.message.id
+    user_id = event.source.user_id # ใช้ ID ของคนที่ส่งรูปมา เพื่อบันทึกให้ถูกกระเป๋า
+    
+    try:
+        # 1. ดึงไฟล์รูปภาพสลิปที่ผู้ใช้ส่งมาจาก LINE
+        message_content = line_bot_api.get_message_content(message_id)
+        image_bytes = message_content.content
+
+        # 2. ส่งไฟล์รูปภาพไปตรวจสอบกับ SlipOK API
+        slipok_url = f"slipok-c6e5baef-65de-46a7-a28b-fdc210e528c8"
+        headers = {
+            'x-authorization': SLIPOK_API_KEY
+        }
+        files = {
+            'files': ('slip.jpg', image_bytes, 'image/jpeg')
+        }
+        
+        response = requests.post(slipok_url, headers=headers, files=files)
+        result = response.json()
+
+        # 3. ตรวจสอบผลลัพธ์ว่าอ่านสลิปสำเร็จหรือไม่
+        if result.get('success'):
+            data = result.get('data', {})
+            amount = data.get('amount')
+            sender_name = data.get('sender', {}).get('displayName', 'ไม่ทราบชื่อ')
+            receiver_name = data.get('receiver', {}).get('displayName', 'ไม่ทราบชื่อ')
+            
+            # บันทึกลง Supabase (ให้เป็นรายจ่ายอัตโนมัติ)
+            now = datetime.now(TH_TZ)
+            date_str = now.strftime("%d/%m/%Y")
+            time_str = now.strftime("%H:%M:%S")
+
+            supabase.table("transactions").insert({
+                "user_id": user_id, 
+                "date": date_str, 
+                "time": time_str,
+                "type": "รายจ่าย", 
+                "amount": amount, 
+                "category": "โอนเงิน",
+                "account": "-", 
+                "note": f"โอนให้ {receiver_name}", 
+                "status": "จ่ายแล้ว"
+            }).execute()
+
+            reply_text = f"✅ ตรวจสอบสลิปสำเร็จ!\nโอนให้: {receiver_name}\nยอดเงิน: {amount} บาท\nบันทึกลงบัญชีเรียบร้อยครับ"
+        else:
+            # กรณีรูปที่ส่งมาไม่ใช่สลิป หรือ SlipOK อ่านไม่ออก
+            reply_text = "❌ ไม่สามารถอ่านข้อมูลจากสลิปนี้ได้ครับ หรือรูปนี้ไม่ใช่สลิปโอนเงิน"
+
+        # ตอบกลับผลลัพธ์กลับไปในแชท LINE
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+
+    except Exception as e:
+        print("Slip Error:", e)
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="❌ ระบบขัดข้อง ไม่สามารถตรวจสลิปได้ครับ")
+        )
 
 @app.route("/")
 def home():
