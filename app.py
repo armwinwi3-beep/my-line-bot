@@ -329,5 +329,30 @@ def api_delete():
         print("API Delete Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# 🔄 API อัปเดตข้อมูล (เช่น เปลี่ยนสถานะบิลเมื่อกดชำระ)
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    data = request.json
+    record_id = data.get('id')
+    user_id = data.get('user_id', 'admin')
+    
+    try:
+        if record_id:
+            # ดักจับค่าที่หน้าเว็บส่งมาเพื่ออัปเดต
+            update_data = {}
+            if 'status' in data: update_data['status'] = data['status']
+            if 'account' in data: update_data['account'] = data['account']
+            if 'amount' in data: update_data['amount'] = data['amount']
+            if 'note' in data: update_data['note'] = data['note']
+            
+            # อัปเดตลง Supabase
+            supabase.table("transactions").update(update_data).eq("id", record_id).eq("user_id", user_id).execute()
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "message": "Missing record ID"}), 400
+    except Exception as e:
+        print("API Update Error:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
