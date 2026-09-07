@@ -198,7 +198,11 @@ def api_data():
                         transfer_in_all[dst_acc] = transfer_in_all.get(dst_acc, 0) + amt
                 elif record_type == "ได้คืนจากลูกหนี้":
                     income_accounts_all[account] = income_accounts_all.get(account, 0) + amt
-                    debtors_all[cat] = debtors_all.get(cat, 0) - amt
+                    # หักยอดลูกหนี้ตามเงินจริง และไม่ให้ยอดค้างติดลบ
+                    debtors_all[cat] = max(
+                        0.0,
+                        debtors_all.get(cat, 0.0) - amt
+                    )
                     
                 if is_target_month:
                     if record_type in ["รายจ่าย", "ให้ยืมเงิน"] or (record_type == "รายจ่ายต้องชำระต่อเดือน" and status == "จ่ายแล้ว"):
@@ -292,12 +296,23 @@ def api_add():
                 "type": "ย้ายเงิน", "amount": amount, "category": dest_acc,
                 "account": source_acc, "note": note, "status": "จ่ายแล้ว"
             }).execute()
-        elif record_type in ['lend', 'repay']:
-            t_type = "ให้ยืมเงิน" if record_type == 'lend' else "ได้คืนจากลูกหนี้"
+        # รองรับทั้งค่าที่ Frontend ใช้แบบอังกฤษ และค่าภาษาไทย
+        # สำคัญ: "ได้คืนจากลูกหนี้" ต้องถูกบันทึกเป็นรายรับ/คืนหนี้
+        # ห้ามตกไปเข้า else เพราะจะถูกบันทึกเป็น "รายจ่าย"
+        elif record_type in ['lend', 'repay', 'ให้ยืมเงิน', 'ได้คืนจากลูกหนี้']:
+            if record_type in ['lend', 'ให้ยืมเงิน']:
+                t_type = "ให้ยืมเงิน"
+            else:
+                t_type = "ได้คืนจากลูกหนี้"
+
             supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
-                "type": t_type, "amount": amount, "category": data.get('category'),
-                "account": data.get('account'), "note": note, "status": "-"
+                "type": t_type,
+                "amount": abs(float(amount or 0)),
+                "category": data.get('category'),
+                "account": data.get('account'),
+                "note": note,
+                "status": "-"
             }).execute()
         else:
             supabase.table("transactions").insert({
