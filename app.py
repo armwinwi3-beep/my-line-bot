@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
+from finance_api import register_finance
 from supabase import create_client, Client
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -21,6 +22,8 @@ SLIPOK_API_KEY = "SLIPOK20MVU8T"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+register_finance(app, supabase, create_client, SUPABASE_URL)
+
 
 TH_TZ = timezone(timedelta(hours=7))
 
@@ -317,7 +320,7 @@ def api_add():
         else:
             supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
-                "type": "รายรับ" if record_type == 'income' else ("รายจ่ายต้องชำระต่อเดือน" if record_type == 'bill' else "รายจ่าย"),
+                "type": "รายรับ" if record_type == 'income' else ("รายจ่ายต้องชำระต่อเดือน" if record_type in ['bill', 'รายจ่ายต้องชำระต่อเดือน'] else "รายจ่าย"),
                 "amount": amount, "category": data.get('category'),
                 "account": data.get('account', '-'), "note": note, "status": status
             }).execute()
