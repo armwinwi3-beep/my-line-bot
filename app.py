@@ -7,6 +7,7 @@ from supabase import create_client, Client
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageMessage
+
 import tempfile
 import requests
 app = Flask(__name__)
@@ -15,7 +16,7 @@ CORS(app)
 # 🔑 ตั้งค่าการเชื่อมต่อ Supabase (แทน Google Sheets)
 # อย่าลืมเปลี่ยน URL และ Key ให้ตรงกับโปรเจกต์ของคุณใน Supabase
 SUPABASE_URL = "https://tmwnszhxbikgjelpskqj.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTM1ODksImV4cCI6MjEwMzMyOTU4OX0.d2w1T00nHf32Ni_wrg_Q7z-zHgwIPlyfdm9gbjlBNZs"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Nzc1MzU4OSwiZXhwIjoyMTAzMzI5NTg5fQ.bmFVT9LQh4W3abH3vgayU7qF_apeQB7k2tZRHzN70eU"
 LINE_CHANNEL_ACCESS_TOKEN = "ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU="
 LINE_CHANNEL_SECRET = "1716fc54190bf6b7177ba7d80d3b07af"
 SLIPOK_API_KEY = "SLIPOK20MVU8T"
