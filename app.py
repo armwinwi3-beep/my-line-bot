@@ -15,11 +15,11 @@ CORS(app)
 
 # 🔑 ตั้งค่าการเชื่อมต่อ Supabase (แทน Google Sheets)
 # อย่าลืมเปลี่ยน URL และ Key ให้ตรงกับโปรเจกต์ของคุณใน Supabase
-SUPABASE_URL = "https://tmwnszhxbikgjelpskqj.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Nzc1MzU4OSwiZXhwIjoyMTAzMzI5NTg5fQ.bmFVT9LQh4W3abH3vgayU7qF_apeQB7k2tZRHzN70eU"
-LINE_CHANNEL_ACCESS_TOKEN = "ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU="
-LINE_CHANNEL_SECRET = "1716fc54190bf6b7177ba7d80d3b07af"
-SLIPOK_API_KEY = "SLIPOK20MVU8T"
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
+SLIPOK_API_KEY = os.environ.get('SLIPOK_API_KEY', '')
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -143,6 +143,7 @@ def api_data():
         transfer_in_all = {}
         transfer_out_all = {}
         debtors_all = {}
+        debtor_people = set()
         
         total_expense = 0.0
         total_income = 0.0
@@ -151,8 +152,14 @@ def api_data():
 
         for row in rows:
             try:
+                if row.get('type') == 'บุคคลคนยืม':
+                    if row.get('category'):
+                        debtor_people.add(row['category'].strip())
+                    continue
                 amt = float(str(row.get('amount', 0)).replace(',', ''))
                 record_type = row.get('type')
+                if record_type in ('ให้ยืมเงิน', 'ได้คืนจากลูกหนี้') and row.get('category'):
+                    debtor_people.add(row['category'].strip())
                 date_val = row.get('date') # เช่น "28/08/2026"
                 time_val = row.get('time') if row.get('time') else "-"
                 account = row.get('account') if row.get('account') else "-"
@@ -267,7 +274,8 @@ def api_data():
             "total_income": total_income, 
             "total_balance": total_balance,
             "account_balances": balance_accounts,
-            "debtors": debtors_all, 
+            "debtors": debtors_all,
+            "debtor_people": sorted(debtor_people), 
             "records": records
         })
     except Exception as e:
@@ -276,6 +284,29 @@ def api_data():
 
 # 📝 API เพิ่มข้อมูลลง Supabase
 # 📝 API เพิ่มข้อมูลลง Supabase (บังคับวันที่ให้เป็นรูปแบบ DD/MM/YYYY เสมอ)
+@app.route('/api/debtor-people', methods=['POST'])
+def api_add_debtor_person():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    user_id = str(data.get('user_id') or 'admin').strip()
+    if not name or len(name) > 120 or not user_id:
+        return jsonify({'status': 'error', 'message': 'กรุณาระบุชื่อไม่เกิน 120 ตัวอักษร'}), 400
+    try:
+        existing = supabase.table('transactions').select('category').eq('user_id', user_id).in_('type', ['บุคคลคนยืม', 'ให้ยืมเงิน', 'ได้คืนจากลูกหนี้']).execute()
+        if any((row.get('category') or '').strip().casefold() == name.casefold() for row in (existing.data or [])):
+            return jsonify({'status': 'success', 'name': name})
+        now = datetime.now(TH_TZ)
+        supabase.table('transactions').insert({
+            'user_id': user_id, 'date': now.strftime('%d/%m/%Y'),
+            'time': now.strftime('%H:%M:%S'), 'type': 'บุคคลคนยืม',
+            'amount': 0, 'category': name, 'account': '-',
+            'note': '-', 'status': '-'
+        }).execute()
+        return jsonify({'status': 'success', 'name': name})
+    except Exception as e:
+        print('API Debtor Person Error:', str(e))
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route("/api/add", methods=["POST"])
 def api_add():
     data = request.json
