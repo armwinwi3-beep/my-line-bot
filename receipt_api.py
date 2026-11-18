@@ -19,6 +19,18 @@ IMAGE_SIGNATURES = {
 }
 
 
+def read_receipt_image(image):
+    if image is None or image.mimetype not in IMAGE_SIGNATURES:
+        raise ValueError("กรุณาเลือกรูป JPG, PNG หรือ WebP")
+    image_bytes = image.read(MAX_IMAGE_BYTES + 1)
+    if not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
+        raise ValueError("รูปหลักฐานต้องมีขนาดไม่เกิน 5 MB")
+    extension, valid_signature = IMAGE_SIGNATURES[image.mimetype]
+    if not valid_signature(image_bytes):
+        raise ValueError("ไฟล์รูปไม่ถูกต้อง")
+    return image_bytes, image.mimetype, extension
+
+
 def register_receipts(app, client_factory, supabase_url):
     api = Blueprint("receipts", __name__, url_prefix="/api/receipts")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -78,19 +90,11 @@ def register_receipts(app, client_factory, supabase_url):
         if len(category) > 120 or len(account) > 120 or len(note) > 1000:
             raise ValueError("ข้อมูลรายการยาวเกินกำหนด")
 
-        image = request.files.get("receipt")
-        if image is None or image.mimetype not in IMAGE_SIGNATURES:
-            raise ValueError("กรุณาเลือกรูป JPG, PNG หรือ WebP")
-        image_bytes = image.read(MAX_IMAGE_BYTES + 1)
-        if not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
-            raise ValueError("รูปหลักฐานต้องมีขนาดไม่เกิน 5 MB")
-        extension, valid_signature = IMAGE_SIGNATURES[image.mimetype]
-        if not valid_signature(image_bytes):
-            raise ValueError("ไฟล์รูปไม่ถูกต้อง")
+        image_bytes, mime_type, extension = read_receipt_image(request.files.get("receipt"))
 
         path = f"{uuid4().hex}{extension}"
         storage = db().storage.from_(BUCKET)
-        storage.upload(path=path, file=image_bytes, file_options={"content-type": image.mimetype, "upsert": "false"})
+        storage.upload(path=path, file=image_bytes, file_options={"content-type": mime_type, "upsert": "false"})
         record_id = None
         try:
             now = datetime.now(timezone(timedelta(hours=7)))
@@ -112,6 +116,31 @@ def register_receipts(app, client_factory, supabase_url):
             storage.remove([path])
             raise
         return jsonify(status="success", id=record_id)
+
+    @api.post("/<int:record_id>/image")
+    def attach_image(record_id):
+        user = identity()
+        owned = db().table("transactions").select("id").eq("id", record_id).eq("user_id", user).execute().data or []
+        if not owned:
+            return jsonify(status="error", message="ไม่พบรายการของบัญชีนี้"), 404
+        image_bytes, mime_type, extension = read_receipt_image(request.files.get("receipt"))
+        existing = db().table("expense_receipts").select("object_path").eq("record_id", record_id).eq("user_id", user).execute().data or []
+        path = f"{uuid4().hex}{extension}"
+        storage = db().storage.from_(BUCKET)
+        storage.upload(path=path, file=image_bytes, file_options={"content-type": mime_type, "upsert": "false"})
+        try:
+            db().table("expense_receipts").upsert({
+                "record_id": record_id, "user_id": user, "object_path": path
+            }, on_conflict="record_id").execute()
+        except Exception:
+            storage.remove([path])
+            raise
+        if existing:
+            try:
+                storage.remove([existing[0]["object_path"]])
+            except Exception as cleanup_error:
+                app.logger.warning("Old receipt cleanup failed: %s", type(cleanup_error).__name__)
+        return jsonify(status="success")
 
     @api.get("")
     def list_receipts():
