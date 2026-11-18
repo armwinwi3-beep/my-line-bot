@@ -350,7 +350,7 @@ def api_add():
                     "category": "ค่าธรรมเนียมย้ายเงิน", "account": source_acc,
                     "note": f"ย้ายเงินไป {dest_acc}", "status": "จ่ายแล้ว"
                 })
-            supabase.table("transactions").insert(entries).execute()
+            inserted = supabase.table("transactions").insert(entries).execute().data or []
         # รองรับทั้งค่าที่ Frontend ใช้แบบอังกฤษ และค่าภาษาไทย
         # สำคัญ: "ได้คืนจากลูกหนี้" ต้องถูกบันทึกเป็นรายรับ/คืนหนี้
         # ห้ามตกไปเข้า else เพราะจะถูกบันทึกเป็น "รายจ่าย"
@@ -360,7 +360,7 @@ def api_add():
             else:
                 t_type = "ได้คืนจากลูกหนี้"
 
-            supabase.table("transactions").insert({
+            inserted = supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": t_type,
                 "amount": abs(float(amount or 0)),
@@ -368,16 +368,16 @@ def api_add():
                 "account": data.get('account'),
                 "note": note,
                 "status": "-"
-            }).execute()
+            }).execute().data or []
         else:
-            supabase.table("transactions").insert({
+            inserted = supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": "รายรับ" if record_type == 'income' else ("รายจ่ายต้องชำระต่อเดือน" if record_type in ['bill', 'รายจ่ายต้องชำระต่อเดือน'] else "รายจ่าย"),
                 "amount": amount, "category": data.get('category'),
                 "account": data.get('account', '-'), "note": note, "status": status
-            }).execute()
+            }).execute().data or []
             
-        return jsonify({"status": "success"})
+        return jsonify({"status": "success", "id": inserted[0]["id"] if inserted else None})
     except Exception as e:
         print("API Add Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
