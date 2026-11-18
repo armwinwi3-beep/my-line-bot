@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal, InvalidOperation
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
@@ -325,12 +326,29 @@ def api_add():
         if record_type == 'transfer':
             source_acc = data.get('sourceAccount')
             dest_acc = data.get('destinationAccount')
-            
-            supabase.table("transactions").insert({
+            try:
+                transfer_amount = Decimal(str(amount))
+                fee = Decimal(str(data.get('fee') or '0'))
+            except InvalidOperation:
+                return jsonify({"status": "error", "message": "จำนวนเงินหรือค่าธรรมเนียมไม่ถูกต้อง"}), 400
+            if (not source_acc or not dest_acc or source_acc == dest_acc
+                    or not transfer_amount.is_finite() or transfer_amount <= 0
+                    or not fee.is_finite() or fee < 0 or fee.as_tuple().exponent < -2):
+                return jsonify({"status": "error", "message": "ข้อมูลการย้ายเงินหรือค่าธรรมเนียมไม่ถูกต้อง"}), 400
+
+            entries = [{
                 "user_id": user_id, "date": date_str, "time": time_str,
-                "type": "ย้ายเงิน", "amount": amount, "category": dest_acc,
+                "type": "ย้ายเงิน", "amount": str(transfer_amount), "category": dest_acc,
                 "account": source_acc, "note": note, "status": "จ่ายแล้ว"
-            }).execute()
+            }]
+            if fee > 0:
+                entries.append({
+                    "user_id": user_id, "date": date_str, "time": time_str,
+                    "type": "รายจ่าย", "amount": str(fee),
+                    "category": "ค่าธรรมเนียมย้ายเงิน", "account": source_acc,
+                    "note": f"ย้ายเงินไป {dest_acc}", "status": "จ่ายแล้ว"
+                })
+            supabase.table("transactions").insert(entries).execute()
         # รองรับทั้งค่าที่ Frontend ใช้แบบอังกฤษ และค่าภาษาไทย
         # สำคัญ: "ได้คืนจากลูกหนี้" ต้องถูกบันทึกเป็นรายรับ/คืนหนี้
         # ห้ามตกไปเข้า else เพราะจะถูกบันทึกเป็น "รายจ่าย"
