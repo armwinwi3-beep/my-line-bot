@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
+from receipt_api import register_receipts
 from finance_api import register_finance
 from supabase import create_client, Client
 from linebot import LineBotApi, WebhookHandler
@@ -25,6 +26,7 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 register_finance(app, supabase, create_client, SUPABASE_URL)
+cleanup_receipt = register_receipts(app, create_client, SUPABASE_URL)
 
 
 TH_TZ = timezone(timedelta(hours=7))
@@ -390,6 +392,10 @@ def api_delete():
     try:
         if record_id:
             supabase.table("transactions").delete().eq("id", record_id).eq("user_id", user_id).execute()
+            try:
+                cleanup_receipt(user_id, record_id)
+            except Exception as cleanup_error:
+                app.logger.warning("Receipt cleanup failed: %s", type(cleanup_error).__name__)
             return jsonify({"status": "success"})
         else:
             return jsonify({"status": "error", "message": "Missing record ID"}), 400
