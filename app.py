@@ -314,6 +314,20 @@ def api_add_debtor_person():
 def api_add():
     data = request.json
     user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
+    slip_reference = data.get('slipReference')
+    if slip_reference is not None:
+        slip_reference = str(slip_reference).strip()
+        if not re.fullmatch(r'[A-Za-z0-9]{8,40}', slip_reference):
+            return jsonify({"status": "error", "message": "เลขอ้างอิงสลิปไม่ถูกต้อง"}), 400
+        existing = (supabase.table("transactions").select("id")
+                    .eq("user_id", user_id).eq("slip_reference", slip_reference)
+                    .limit(1).execute().data or [])
+        if not existing:
+            existing = (supabase.table("transactions").select("id")
+                        .eq("user_id", user_id).ilike("note", f"%อ้างอิง {slip_reference}")
+                        .limit(1).execute().data or [])
+        if existing:
+            return jsonify({"status": "success", "duplicate": True, "id": existing[0]["id"]})
     
     now = datetime.now(TH_TZ)
     date_str = now.strftime("%d/%m/%Y") # เช่น "26/08/2026" มีเลข 0 นำหน้าเสมอ วันที่กลุ่มจะไม่แตกแยกอีก
@@ -350,6 +364,8 @@ def api_add():
                     "category": "ค่าธรรมเนียมย้ายเงิน", "account": source_acc,
                     "note": f"ย้ายเงินไป {dest_acc}", "status": "จ่ายแล้ว"
                 })
+            if slip_reference:
+                entries[0]["slip_reference"] = slip_reference
             inserted = supabase.table("transactions").insert(entries).execute().data or []
         # รองรับทั้งค่าที่ Frontend ใช้แบบอังกฤษ และค่าภาษาไทย
         # สำคัญ: "ได้คืนจากลูกหนี้" ต้องถูกบันทึกเป็นรายรับ/คืนหนี้
@@ -370,15 +386,27 @@ def api_add():
                 "status": "-"
             }).execute().data or []
         else:
-            inserted = supabase.table("transactions").insert({
+            entry = {
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": "รายรับ" if record_type == 'income' else ("รายจ่ายต้องชำระต่อเดือน" if record_type in ['bill', 'รายจ่ายต้องชำระต่อเดือน'] else "รายจ่าย"),
                 "amount": amount, "category": data.get('category'),
                 "account": data.get('account', '-'), "note": note, "status": status
-            }).execute().data or []
+            }
+            if slip_reference:
+                entry["slip_reference"] = slip_reference
+            inserted = supabase.table("transactions").insert(entry).execute().data or []
             
         return jsonify({"status": "success", "id": inserted[0]["id"] if inserted else None})
     except Exception as e:
+        if slip_reference:
+            try:
+                existing = (supabase.table("transactions").select("id")
+                            .eq("user_id", user_id).eq("slip_reference", slip_reference)
+                            .limit(1).execute().data or [])
+                if existing:
+                    return jsonify({"status": "success", "duplicate": True, "id": existing[0]["id"]})
+            except Exception:
+                pass
         print("API Add Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
