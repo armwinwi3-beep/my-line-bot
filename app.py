@@ -317,7 +317,7 @@ def api_add():
     user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
     slip_reference = data.get('slipReference')
     if slip_reference is not None:
-        slip_reference = str(slip_reference).strip()
+        slip_reference = str(slip_reference).strip().upper()
         if not re.fullmatch(r'[A-Za-z0-9]{8,40}', slip_reference):
             return jsonify({"status": "error", "message": "เลขอ้างอิงสลิปไม่ถูกต้อง"}), 400
         existing = (supabase.table("transactions").select("id")
