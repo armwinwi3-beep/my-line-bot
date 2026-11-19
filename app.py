@@ -316,6 +316,10 @@ def api_add():
     data = request.json
     user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
     slip_reference = data.get('slipReference')
+    if slip_reference is None and str(data.get('note') or '').startswith('จากสลิป'):
+        if 'อ้างอิง ' not in data['note']:
+            return jsonify({"status": "error", "message": "อ่านเลขอ้างอิงสลิปไม่ถูกต้อง"}), 400
+        slip_reference = data['note'].rsplit('อ้างอิง ', 1)[1].strip()
     if slip_reference is not None:
         slip_reference = str(slip_reference).strip().upper()
         if not re.fullmatch(r'[A-Za-z0-9]{8,40}', slip_reference):
