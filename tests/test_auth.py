@@ -33,6 +33,7 @@ def line_profile(user_id, status=200):
 class VerifyUserTest(unittest.TestCase):
     def setUp(self):
         auth._failures.clear()
+        auth._token_cache.clear()
         self.env = mock.patch.dict(os.environ, {"ADMIN_PIN": "1234"})
         self.env.start()
         self.client = make_app().test_client()
@@ -78,6 +79,27 @@ class VerifyUserTest(unittest.TestCase):
         with line_profile("Uabc"):
             self.assertEqual(self.get("Uabc", {"Authorization": "Bearer t"}).status_code, 200)
             self.assertEqual(self.get("Uother", {"Authorization": "Bearer t"}).status_code, 401)
+
+    def test_verified_token_is_cached(self):
+        with line_profile("Uabc") as get:
+            for _ in range(3):
+                self.assertEqual(self.get("Uabc", {"Authorization": "Bearer t"}).status_code, 200)
+            self.assertEqual(get.call_count, 1)
+            # cached token still cannot act as a different user
+            self.assertEqual(self.get("Uother", {"Authorization": "Bearer t"}).status_code, 401)
+
+    def test_rejected_token_is_not_cached(self):
+        with line_profile(None, status=401) as get:
+            self.get("Uabc", {"Authorization": "Bearer bad"})
+            self.get("Uabc", {"Authorization": "Bearer bad"})
+            self.assertEqual(get.call_count, 2)
+
+    def test_cached_token_expires(self):
+        with line_profile("Uabc") as get, mock.patch.object(auth.time, "monotonic", return_value=1000.0):
+            self.get("Uabc", {"Authorization": "Bearer t"})
+        with line_profile("Uabc") as get, mock.patch.object(auth.time, "monotonic", return_value=1000.0 + auth.TOKEN_CACHE_SECONDS + 1):
+            self.get("Uabc", {"Authorization": "Bearer t"})
+            self.assertEqual(get.call_count, 1)
 
     def test_line_token_cannot_act_as_admin(self):
         with line_profile("admin"):

@@ -6,6 +6,7 @@ Rules:
 - Otherwise the caller must send "Authorization: Bearer <LIFF access token>" and the
   LINE profile behind that token must be the same user_id the request names.
 """
+import hashlib
 import hmac
 import os
 import threading
@@ -18,6 +19,36 @@ LOCKOUT_SECONDS = 15 * 60
 
 _failures = {}
 _lock = threading.Lock()
+
+# Verified LINE tokens, so each page load does not ask LINE again for every request.
+TOKEN_CACHE_SECONDS = 5 * 60
+TOKEN_CACHE_MAX = 1000
+_token_cache = {}
+
+
+def _line_profile_id(token):
+    key = hashlib.sha256(token.encode()).hexdigest()
+    now = time.monotonic()
+    with _lock:
+        cached = _token_cache.get(key)
+        if cached and cached[1] > now:
+            return cached[0]
+    try:
+        response = requests.get(
+            "https://api.line.me/v2/profile",
+            headers={"Authorization": token},
+            timeout=10,
+        )
+        profile_id = response.json().get("userId") if response.status_code == 200 else None
+    except (requests.RequestException, ValueError):
+        raise PermissionError("ตรวจสอบบัญชี LINE ไม่สำเร็จ กรุณาลองใหม่")
+    if profile_id:
+        with _lock:
+            if len(_token_cache) >= TOKEN_CACHE_MAX:
+                for old in [k for k, v in _token_cache.items() if v[1] <= now] or list(_token_cache)[:TOKEN_CACHE_MAX // 2]:
+                    _token_cache.pop(old, None)
+            _token_cache[key] = (profile_id, now + TOKEN_CACHE_SECONDS)
+    return profile_id
 
 
 def _client_key(request):
@@ -61,15 +92,6 @@ def verify_user(request, user_id):
     token = request.headers.get("Authorization", "")
     if not token.startswith("Bearer ") or len(token) <= len("Bearer "):
         raise PermissionError("กรุณาเปิดเว็บผ่าน LINE อีกครั้ง")
-    try:
-        response = requests.get(
-            "https://api.line.me/v2/profile",
-            headers={"Authorization": token},
-            timeout=10,
-        )
-        profile_id = response.json().get("userId") if response.status_code == 200 else None
-    except (requests.RequestException, ValueError):
-        raise PermissionError("ตรวจสอบบัญชี LINE ไม่สำเร็จ กรุณาลองใหม่")
-    if profile_id != user_id:
+    if _line_profile_id(token) != user_id:
         raise PermissionError("บัญชี LINE ไม่ตรงกับผู้ใช้")
     return user_id
