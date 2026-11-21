@@ -1,7 +1,11 @@
 import os
+import re
+from decimal import Decimal, InvalidOperation
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
+from auth import verify_user
+from receipt_api import register_receipts
 from supabase import create_client, Client
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -13,16 +17,22 @@ CORS(app)
 
 # 🔑 ตั้งค่าการเชื่อมต่อ Supabase (แทน Google Sheets)
 # อย่าลืมเปลี่ยน URL และ Key ให้ตรงกับโปรเจกต์ของคุณใน Supabase
-SUPABASE_URL = "https://tmwnszhxbikgjelpskqj.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtd25zemh4YmlrZ2plbHBza3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTM1ODksImV4cCI6MjEwMzMyOTU4OX0.d2w1T00nHf32Ni_wrg_Q7z-zHgwIPlyfdm9gbjlBNZs"
-LINE_CHANNEL_ACCESS_TOKEN = "ETXUTTB9PqZ1QymR0zSM4c+/7ecw+x0BIoB3jc6YB4fm20Hy7OxSV/C4jR7SDAE9hyEx/UBwoc9H7go6147rW9glQMGZO/n3XZ/lf6+Dp7vrTVP01NMzjTqEKYMCY/AfmI/ZSIi5hRDjxjufoO6sdQdB04t89/1O/w1cDnyilFU="
-LINE_CHANNEL_SECRET = "1716fc54190bf6b7177ba7d80d3b07af"
-SLIPOK_API_KEY = "SLIPOK20MVU8T"
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
+SLIPOK_API_KEY = os.environ.get('SLIPOK_API_KEY', '')
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+cleanup_receipt = register_receipts(app, create_client, SUPABASE_URL)
 
 TH_TZ = timezone(timedelta(hours=7))
+
+
+@app.errorhandler(PermissionError)
+def unauthorized(error):
+    return jsonify({"status": "error", "message": str(error)}), 401
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -126,7 +136,7 @@ def home():
 @app.route("/api/data", methods=["GET"])
 def api_data():
     month_str = request.args.get('month') # รูปแบบเช่น "08/26"
-    user_id = request.args.get('user_id', 'admin') # รองรับหลาย User (ค่าเริ่มต้นคือ my_account)
+    user_id = verify_user(request, request.args.get('user_id'))
     
     try:
         # ดึงข้อมูลจากตาราง transactions ใน Supabase
@@ -139,6 +149,7 @@ def api_data():
         transfer_in_all = {}
         transfer_out_all = {}
         debtors_all = {}
+        debtor_people = set()
         
         total_expense = 0.0
         total_income = 0.0
@@ -147,8 +158,14 @@ def api_data():
 
         for row in rows:
             try:
+                if row.get('type') == 'บุคคลคนยืม':
+                    if row.get('category'):
+                        debtor_people.add(row['category'].strip())
+                    continue
                 amt = float(str(row.get('amount', 0)).replace(',', ''))
                 record_type = row.get('type')
+                if record_type in ('ให้ยืมเงิน', 'ได้คืนจากลูกหนี้') and row.get('category'):
+                    debtor_people.add(row['category'].strip())
                 date_val = row.get('date') # เช่น "28/08/2026"
                 time_val = row.get('time') if row.get('time') else "-"
                 account = row.get('account') if row.get('account') else "-"
@@ -264,6 +281,7 @@ def api_data():
             "total_balance": total_balance,
             "account_balances": balance_accounts,
             "debtors": debtors_all, 
+            "debtor_people": sorted(debtor_people),
             "records": records
         })
     except Exception as e:
@@ -271,11 +289,52 @@ def api_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # 📝 API เพิ่มข้อมูลลง Supabase
+@app.route('/api/debtor-people', methods=['POST'])
+def api_add_debtor_person():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    user_id = verify_user(request, data.get('user_id'))
+    if not name or len(name) > 120 or not user_id:
+        return jsonify({'status': 'error', 'message': 'กรุณาระบุชื่อไม่เกิน 120 ตัวอักษร'}), 400
+    try:
+        existing = supabase.table('transactions').select('category').eq('user_id', user_id).in_('type', ['บุคคลคนยืม', 'ให้ยืมเงิน', 'ได้คืนจากลูกหนี้']).execute()
+        if any((row.get('category') or '').strip().casefold() == name.casefold() for row in (existing.data or [])):
+            return jsonify({'status': 'success', 'name': name})
+        now = datetime.now(TH_TZ)
+        supabase.table('transactions').insert({
+            'user_id': user_id, 'date': now.strftime('%d/%m/%Y'),
+            'time': now.strftime('%H:%M:%S'), 'type': 'บุคคลคนยืม',
+            'amount': 0, 'category': name, 'account': '-',
+            'note': '-', 'status': '-'
+        }).execute()
+        return jsonify({'status': 'success', 'name': name})
+    except Exception as e:
+        print('API Debtor Person Error:', str(e))
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 # 📝 API เพิ่มข้อมูลลง Supabase (บังคับวันที่ให้เป็นรูปแบบ DD/MM/YYYY เสมอ)
 @app.route("/api/add", methods=["POST"])
 def api_add():
-    data = request.json
-    user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
+    data = request.get_json(silent=True) or {}
+    user_id = verify_user(request, data.get('user_id'))
+    slip_reference = data.get('slipReference')
+    if slip_reference is None and str(data.get('note') or '').startswith('จากสลิป'):
+        if 'อ้างอิง ' not in data['note']:
+            return jsonify({"status": "error", "message": "อ่านเลขอ้างอิงสลิปไม่ถูกต้อง"}), 400
+        slip_reference = data['note'].rsplit('อ้างอิง ', 1)[1].strip()
+    if slip_reference is not None:
+        slip_reference = str(slip_reference).strip().upper()
+        if not re.fullmatch(r'[A-Za-z0-9]{8,40}', slip_reference):
+            return jsonify({"status": "error", "message": "เลขอ้างอิงสลิปไม่ถูกต้อง"}), 400
+        existing = (supabase.table("transactions").select("id")
+                    .eq("user_id", user_id).eq("slip_reference", slip_reference)
+                    .limit(1).execute().data or [])
+        if not existing:
+            existing = (supabase.table("transactions").select("id")
+                        .eq("user_id", user_id).ilike("note", f"%อ้างอิง {slip_reference}")
+                        .limit(1).execute().data or [])
+        if existing:
+            return jsonify({"status": "success", "duplicate": True, "id": existing[0]["id"]})
     
     now = datetime.now(TH_TZ)
     date_str = now.strftime("%d/%m/%Y") # เช่น "26/08/2026" มีเลข 0 นำหน้าเสมอ วันที่กลุ่มจะไม่แตกแยกอีก
@@ -290,12 +349,31 @@ def api_add():
         if record_type == 'transfer':
             source_acc = data.get('sourceAccount')
             dest_acc = data.get('destinationAccount')
-            
-            supabase.table("transactions").insert({
+            try:
+                transfer_amount = Decimal(str(amount))
+                fee = Decimal(str(data.get('fee') or '0'))
+            except InvalidOperation:
+                return jsonify({"status": "error", "message": "จำนวนเงินหรือค่าธรรมเนียมไม่ถูกต้อง"}), 400
+            if (not source_acc or not dest_acc or source_acc == dest_acc
+                    or not transfer_amount.is_finite() or transfer_amount <= 0
+                    or not fee.is_finite() or fee < 0 or fee.as_tuple().exponent < -2):
+                return jsonify({"status": "error", "message": "ข้อมูลการย้ายเงินหรือค่าธรรมเนียมไม่ถูกต้อง"}), 400
+
+            entries = [{
                 "user_id": user_id, "date": date_str, "time": time_str,
-                "type": "ย้ายเงิน", "amount": amount, "category": dest_acc,
+                "type": "ย้ายเงิน", "amount": str(transfer_amount), "category": dest_acc,
                 "account": source_acc, "note": note, "status": "จ่ายแล้ว"
-            }).execute()
+            }]
+            if slip_reference:
+                entries[0]["slip_reference"] = slip_reference
+            if fee > 0:
+                entries.append({
+                    "user_id": user_id, "date": date_str, "time": time_str,
+                    "type": "รายจ่าย", "amount": str(fee),
+                    "category": "ค่าธรรมเนียมย้ายเงิน", "account": source_acc,
+                    "note": f"ย้ายเงินไป {dest_acc}", "status": "จ่ายแล้ว"
+                })
+            inserted = supabase.table("transactions").insert(entries).execute().data or []
         # รองรับทั้งค่าที่ Frontend ใช้แบบอังกฤษ และค่าภาษาไทย
         # สำคัญ: "ได้คืนจากลูกหนี้" ต้องถูกบันทึกเป็นรายรับ/คืนหนี้
         # ห้ามตกไปเข้า else เพราะจะถูกบันทึกเป็น "รายจ่าย"
@@ -305,7 +383,7 @@ def api_add():
             else:
                 t_type = "ได้คืนจากลูกหนี้"
 
-            supabase.table("transactions").insert({
+            inserted = supabase.table("transactions").insert({
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": t_type,
                 "amount": abs(float(amount or 0)),
@@ -313,30 +391,46 @@ def api_add():
                 "account": data.get('account'),
                 "note": note,
                 "status": "-"
-            }).execute()
+            }).execute().data or []
         else:
-            supabase.table("transactions").insert({
+            entry = {
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": "รายรับ" if record_type == 'income' else ("รายจ่ายต้องชำระต่อเดือน" if record_type == 'bill' else "รายจ่าย"),
                 "amount": amount, "category": data.get('category'),
                 "account": data.get('account', '-'), "note": note, "status": status
-            }).execute()
+            }
+            if slip_reference:
+                entry["slip_reference"] = slip_reference
+            inserted = supabase.table("transactions").insert(entry).execute().data or []
             
-        return jsonify({"status": "success"})
+        return jsonify({"status": "success", "id": inserted[0]["id"] if inserted else None})
     except Exception as e:
+        if slip_reference:
+            try:
+                existing = (supabase.table("transactions").select("id")
+                            .eq("user_id", user_id).eq("slip_reference", slip_reference)
+                            .limit(1).execute().data or [])
+                if existing:
+                    return jsonify({"status": "success", "duplicate": True, "id": existing[0]["id"]})
+            except Exception:
+                pass
         print("API Add Error:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # 🗑️ API ลบข้อมูล (รองรับการลบด้วย ID)
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     record_id = data.get('id')
-    user_id = data.get('user_id', 'admin')
+    user_id = verify_user(request, data.get('user_id'))
     
     try:
         if record_id:
             supabase.table("transactions").delete().eq("id", record_id).eq("user_id", user_id).execute()
+            try:
+                cleanup_receipt(user_id, record_id)
+            except Exception as cleanup_error:
+                app.logger.warning("Receipt cleanup failed: %s", type(cleanup_error).__name__)
             return jsonify({"status": "success"})
         else:
             return jsonify({"status": "error", "message": "Missing record ID"}), 400
@@ -347,9 +441,9 @@ def api_delete():
 # 🔄 API อัปเดตข้อมูล (เช่น เปลี่ยนสถานะบิลเมื่อกดชำระ)
 @app.route("/api/update", methods=["POST"])
 def api_update():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     record_id = data.get('id')
-    user_id = data.get('user_id', 'admin')
+    user_id = verify_user(request, data.get('user_id'))
     
     try:
         if record_id:
