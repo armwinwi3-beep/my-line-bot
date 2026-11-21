@@ -38,7 +38,7 @@ class APITests(unittest.TestCase):
         with patch.dict(os.environ,{'SUPABASE_SERVICE_ROLE_KEY':'test-only','ADMIN_PIN':'test-pin'}):
             register_finance(app,self.db,lambda *_:self.db,'https://example.invalid')
         self.client=app.test_client()
-        self.profile=patch('finance_api.requests.get',return_value=SimpleNamespace(status_code=200,json=lambda:{'userId':'U1'}))
+        self.profile=patch('auth.requests.get',return_value=SimpleNamespace(status_code=200,json=lambda:{'userId':'U1'}))
         self.profile.start(); self.addCleanup(self.profile.stop)
         self.headers={'Authorization':'Bearer fake-token'}
 

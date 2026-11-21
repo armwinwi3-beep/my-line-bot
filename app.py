@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
+from auth import verify_user
 from receipt_api import register_receipts
 from finance_api import register_finance
 from supabase import create_client, Client
@@ -31,6 +32,11 @@ cleanup_receipt = register_receipts(app, create_client, SUPABASE_URL)
 
 
 TH_TZ = timezone(timedelta(hours=7))
+
+
+@app.errorhandler(PermissionError)
+def unauthorized(error):
+    return jsonify({"status": "error", "message": str(error)}), 401
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -134,7 +140,7 @@ def home():
 @app.route("/api/data", methods=["GET"])
 def api_data():
     month_str = request.args.get('month') # รูปแบบเช่น "08/26"
-    user_id = request.args.get('user_id', 'admin') # รองรับหลาย User (ค่าเริ่มต้นคือ my_account)
+    user_id = verify_user(request, request.args.get('user_id'))
     
     try:
         # ดึงข้อมูลจากตาราง transactions ใน Supabase
@@ -292,7 +298,7 @@ def api_data():
 def api_add_debtor_person():
     data = request.get_json(silent=True) or {}
     name = str(data.get('name') or '').strip()
-    user_id = str(data.get('user_id') or 'admin').strip()
+    user_id = verify_user(request, data.get('user_id'))
     if not name or len(name) > 120 or not user_id:
         return jsonify({'status': 'error', 'message': 'กรุณาระบุชื่อไม่เกิน 120 ตัวอักษร'}), 400
     try:
@@ -313,8 +319,8 @@ def api_add_debtor_person():
 
 @app.route("/api/add", methods=["POST"])
 def api_add():
-    data = request.json
-    user_id = data.get('user_id', 'admin') # ใช้ 'admin' ตามที่คุณตั้งไว้
+    data = request.get_json(silent=True) or {}
+    user_id = verify_user(request, data.get('user_id'))
     slip_reference = data.get('slipReference')
     if slip_reference is None and str(data.get('note') or '').startswith('จากสลิป'):
         if 'อ้างอิง ' not in data['note']:
@@ -418,9 +424,9 @@ def api_add():
 # 🗑️ API ลบข้อมูล (รองรับการลบด้วย ID)
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     record_id = data.get('id')
-    user_id = data.get('user_id', 'admin')
+    user_id = verify_user(request, data.get('user_id'))
     
     try:
         if record_id:
@@ -439,9 +445,9 @@ def api_delete():
 # 🔄 API อัปเดตข้อมูล (เช่น เปลี่ยนสถานะบิลเมื่อกดชำระ)
 @app.route("/api/update", methods=["POST"])
 def api_update():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     record_id = data.get('id')
-    user_id = data.get('user_id', 'admin')
+    user_id = verify_user(request, data.get('user_id'))
     
     try:
         if record_id:
