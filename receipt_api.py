@@ -1,13 +1,13 @@
 """Private image attachments for expense records."""
-import hmac
 import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from urllib.parse import urljoin
 
-import requests
 from flask import Blueprint, jsonify, request
+
+from auth import verify_user
 
 
 BUCKET = "expense-receipts"
@@ -43,24 +43,7 @@ def register_receipts(app, client_factory, supabase_url):
 
     def identity():
         user = request.form.get("user_id") if request.method == "POST" else request.args.get("user_id")
-        if not isinstance(user, str) or not user:
-            raise PermissionError("กรุณาเข้าสู่ระบบก่อน")
-        if user == "admin":
-            pin = os.environ.get("ADMIN_PIN", "")
-            if not pin or not hmac.compare_digest(request.headers.get("X-Admin-Pin", ""), pin):
-                raise PermissionError("กรุณาเข้าสู่ระบบแอดมินอีกครั้ง")
-        else:
-            token = request.headers.get("Authorization", "")
-            if not token.startswith("Bearer "):
-                raise PermissionError("กรุณาเปิดเว็บผ่าน LINE อีกครั้ง")
-            response = requests.get(
-                "https://api.line.me/v2/profile",
-                headers={"Authorization": token},
-                timeout=10,
-            )
-            if response.status_code != 200 or response.json().get("userId") != user:
-                raise PermissionError("บัญชี LINE ไม่ตรงกับผู้ใช้")
-        return user
+        return verify_user(request, user)
 
     @api.errorhandler(PermissionError)
     def unauthorized(error):

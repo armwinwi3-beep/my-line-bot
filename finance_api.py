@@ -3,12 +3,11 @@
 The new private tables require SUPABASE_SERVICE_ROLE_KEY on the server.
 LINE profiles are verified before accepting the user identity for these routes.
 """
-import hmac
 import os
 from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request
-import requests
+from auth import verify_user
 from finance_domain import budget, budget_usage, recurring, transaction, record_date
 
 
@@ -19,20 +18,7 @@ def register_finance(app, existing_client, client_factory, supabase_url):
 
     def identity():
         user = request.args.get('user_id') if request.method == 'GET' else (request.get_json(silent=True) or {}).get('user_id')
-        if not isinstance(user, str) or not user:
-            raise PermissionError('กรุณาเข้าสู่ระบบก่อน')
-        if user == 'admin':
-            pin = os.environ.get('ADMIN_PIN', '')
-            if not pin or not hmac.compare_digest(request.headers.get('X-Admin-Pin', ''), pin):
-                raise PermissionError('กรุณาตั้งค่า ADMIN_PIN ฝั่งเซิร์ฟเวอร์และเข้าสู่ระบบอีกครั้ง')
-        else:
-            token = request.headers.get('Authorization', '')
-            if not token.startswith('Bearer '):
-                raise PermissionError('กรุณาเปิดเว็บผ่าน LINE อีกครั้ง')
-            response = requests.get('https://api.line.me/v2/profile', headers={'Authorization': token}, timeout=10)
-            if response.status_code != 200 or response.json().get('userId') != user:
-                raise PermissionError('บัญชี LINE ไม่ตรงกับผู้ใช้')
-        return user
+        return verify_user(request, user)
 
     def db():
         if private_client is None:
