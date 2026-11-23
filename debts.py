@@ -37,3 +37,31 @@ def check_repay_link(db, user_id, repays_id, person, amount):
     if _money(amount) > remaining:
         raise ValueError(f"ยอดคืนเกินยอดที่ค้างของรายการนี้ ({remaining:,.2f} บาท)")
     return loan_id
+
+
+MAX_LOANS_PER_REPAYMENT = 50
+
+
+def split_repayment(db, user_id, repays, person, amount):
+    """Validate a repayment spread over several loans.
+
+    repays is a list of {"id": loan id, "amount": part}. The parts must add up to
+    the whole amount, each loan may appear once, and each part must fit what is
+    still owed on its loan. Returns [(loan_id, Decimal part)].
+    """
+    if not isinstance(repays, list) or not repays or len(repays) > MAX_LOANS_PER_REPAYMENT:
+        raise ValueError("กรุณาเลือกรายการยืมที่คืน")
+    parts = []
+    seen = set()
+    for item in repays:
+        if not isinstance(item, dict):
+            raise ValueError("รายการยืมที่เลือกไม่ถูกต้อง")
+        part = _money(item.get("amount"))
+        loan_id = check_repay_link(db, user_id, item.get("id"), person, part)
+        if loan_id in seen:
+            raise ValueError("เลือกรายการยืมซ้ำ")
+        seen.add(loan_id)
+        parts.append((loan_id, part))
+    if sum(part for _, part in parts).quantize(Decimal("0.01")) != _money(amount).quantize(Decimal("0.01")):
+        raise ValueError("ยอดที่แบ่งให้แต่ละรายการไม่เท่ากับยอดคืน")
+    return parts

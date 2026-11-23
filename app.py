@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
 from auth import verify_user
-from debts import check_repay_link
+from debts import check_repay_link, split_repayment
 from receipt_api import register_receipts
 from finance_api import register_finance
 from supabase import create_client, Client
@@ -397,13 +397,18 @@ def api_add():
                 "note": note,
                 "status": "-"
             }
+            entries = [entry]
             # ยอดคืนที่เลือกรายการยืมไว้ จะหักรายการนั้นโดยตรง
-            if t_type == "ได้คืนจากลูกหนี้" and data.get('repaysId') not in (None, ''):
-                try:
+            # เลือกหลายรายการได้: แยกเป็นหนึ่งแถวต่อหนึ่งรายการยืม แล้วบันทึกพร้อมกัน
+            try:
+                if t_type == "ได้คืนจากลูกหนี้" and data.get('repays'):
+                    parts = split_repayment(supabase, user_id, data.get('repays'), data.get('category'), amount)
+                    entries = [dict(entry, amount=float(part), repays_id=loan_id) for loan_id, part in parts]
+                elif t_type == "ได้คืนจากลูกหนี้" and data.get('repaysId') not in (None, ''):
                     entry["repays_id"] = check_repay_link(supabase, user_id, data.get('repaysId'), data.get('category'), amount)
-                except ValueError as error:
-                    return jsonify({"status": "error", "message": str(error)}), 400
-            inserted = supabase.table("transactions").insert(entry).execute().data or []
+            except ValueError as error:
+                return jsonify({"status": "error", "message": str(error)}), 400
+            inserted = supabase.table("transactions").insert(entries if len(entries) > 1 else entries[0]).execute().data or []
         else:
             entry = {
                 "user_id": user_id, "date": date_str, "time": time_str,
