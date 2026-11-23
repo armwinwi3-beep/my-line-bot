@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 from flask_cors import CORS
 from auth import verify_user
+from debts import check_repay_link
 from receipt_api import register_receipts
 from finance_api import register_finance
 from supabase import create_client, Client
@@ -387,7 +388,7 @@ def api_add():
             else:
                 t_type = "ได้คืนจากลูกหนี้"
 
-            inserted = supabase.table("transactions").insert({
+            entry = {
                 "user_id": user_id, "date": date_str, "time": time_str,
                 "type": t_type,
                 "amount": abs(float(amount or 0)),
@@ -395,7 +396,14 @@ def api_add():
                 "account": data.get('account'),
                 "note": note,
                 "status": "-"
-            }).execute().data or []
+            }
+            # ยอดคืนที่เลือกรายการยืมไว้ จะหักรายการนั้นโดยตรง
+            if t_type == "ได้คืนจากลูกหนี้" and data.get('repaysId') not in (None, ''):
+                try:
+                    entry["repays_id"] = check_repay_link(supabase, user_id, data.get('repaysId'), data.get('category'), amount)
+                except ValueError as error:
+                    return jsonify({"status": "error", "message": str(error)}), 400
+            inserted = supabase.table("transactions").insert(entry).execute().data or []
         else:
             entry = {
                 "user_id": user_id, "date": date_str, "time": time_str,
