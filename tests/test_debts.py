@@ -2,7 +2,7 @@
 import unittest
 from types import SimpleNamespace
 
-from debts import check_repay_link
+from debts import check_repay_link, split_repayment
 
 
 class Query:
@@ -58,6 +58,32 @@ class CheckRepayLinkTest(unittest.TestCase):
             check_repay_link(DB(rows()), "U1", "abc", "Dd", 1)
         with self.assertRaisesRegex(ValueError, "มากกว่า 0"):
             check_repay_link(DB(rows()), "U1", 1, "Dd", 0)
+
+
+def more_rows():
+    return rows() + [{"id": 6, "user_id": "U1", "type": "ให้ยืมเงิน", "category": "Dd", "amount": 250}]
+
+
+class SplitRepaymentTest(unittest.TestCase):
+    def test_splits_over_several_loans(self):
+        parts = split_repayment(DB(more_rows()), "U1", [{"id": 1, "amount": 150}, {"id": "6", "amount": "100"}], "Dd", 250)
+        self.assertEqual([(i, float(a)) for i, a in parts], [(1, 150.0), (6, 100.0)])
+
+    def test_parts_must_add_up(self):
+        with self.assertRaisesRegex(ValueError, "ไม่เท่ากับ"):
+            split_repayment(DB(more_rows()), "U1", [{"id": 1, "amount": 100}, {"id": 6, "amount": 100}], "Dd", 250)
+
+    def test_each_part_must_fit_its_loan(self):
+        with self.assertRaisesRegex(ValueError, "เกินยอดที่ค้าง"):
+            split_repayment(DB(more_rows()), "U1", [{"id": 1, "amount": 151}, {"id": 6, "amount": 99}], "Dd", 250)
+
+    def test_rejects_duplicates_empty_and_other_person(self):
+        with self.assertRaisesRegex(ValueError, "ซ้ำ"):
+            split_repayment(DB(more_rows()), "U1", [{"id": 1, "amount": 10}, {"id": 1, "amount": 10}], "Dd", 20)
+        with self.assertRaisesRegex(ValueError, "เลือกรายการยืม"):
+            split_repayment(DB(more_rows()), "U1", [], "Dd", 20)
+        with self.assertRaisesRegex(ValueError, "คนอื่น"):
+            split_repayment(DB(more_rows()), "U1", [{"id": 3, "amount": 10}], "Dd", 10)
 
 
 if __name__ == "__main__":
