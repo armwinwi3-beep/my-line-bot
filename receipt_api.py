@@ -11,7 +11,7 @@ from auth import verify_user
 
 
 BUCKET = "expense-receipts"
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_IMAGE_BYTES = 4 * 1024 * 1024  # Vercel request bodies are capped at 4.5 MB
 IMAGE_SIGNATURES = {
     "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
     "image/png": (".png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
@@ -24,7 +24,7 @@ def read_receipt_image(image):
         raise ValueError("กรุณาเลือกรูป JPG, PNG หรือ WebP")
     image_bytes = image.read(MAX_IMAGE_BYTES + 1)
     if not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
-        raise ValueError("รูปหลักฐานต้องมีขนาดไม่เกิน 5 MB")
+        raise ValueError("รูปหลักฐานต้องมีขนาดไม่เกิน 4 MB")
     extension, valid_signature = IMAGE_SIGNATURES[image.mimetype]
     if not valid_signature(image_bytes):
         raise ValueError("ไฟล์รูปไม่ถูกต้อง")

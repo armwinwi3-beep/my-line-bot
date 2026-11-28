@@ -56,27 +56,80 @@ def _client_key(request):
     return forwarded.split(",")[0].strip() or request.remote_addr or "unknown"
 
 
+# Wrong-PIN counts must survive between requests. On Vercel each request may run in a
+# fresh instance, so the counts live in Supabase (table auth_pin_failures, service-role
+# key only). Without that key (tests, local runs) they stay in memory.
+_pin_db = None
+
+
+def _pin_store():
+    global _pin_db
+    if _pin_db is None:
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if not url or not key:
+            return None
+        from supabase import create_client
+        _pin_db = create_client(url, key)
+    return _pin_db
+
+
+def _get_failures(key):
+    db = _pin_store()
+    if db is not None:
+        try:
+            rows = db.table("auth_pin_failures").select("count,since").eq("client_key", key).limit(1).execute().data or []
+            return (rows[0]["count"], float(rows[0]["since"])) if rows else None
+        except Exception:
+            pass
+    with _lock:
+        return _failures.get(key)
+
+
+def _set_failures(key, count, since):
+    db = _pin_store()
+    if db is not None:
+        try:
+            db.table("auth_pin_failures").upsert(
+                {"client_key": key, "count": count, "since": since}, on_conflict="client_key"
+            ).execute()
+            return
+        except Exception:
+            pass
+    with _lock:
+        _failures[key] = (count, since)
+
+
+def _clear_failures(key):
+    db = _pin_store()
+    if db is not None:
+        try:
+            db.table("auth_pin_failures").delete().eq("client_key", key).execute()
+        except Exception:
+            pass
+    with _lock:
+        _failures.pop(key, None)
+
+
 def _check_pin(request):
     """Return True for a correct PIN, False when no PIN was sent, raise on a wrong one."""
     sent = request.headers.get("X-Admin-Pin", "")
     if not sent:
         return False
-    key = _client_key(request)
-    now = time.monotonic()
-    with _lock:
-        count, since = _failures.get(key, (0, now))
-        if count >= MAX_PIN_FAILURES and now - since < LOCKOUT_SECONDS:
-            raise PermissionError("ใส่ PIN ผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่")
+    key = hashlib.sha256(_client_key(request).encode()).hexdigest()
+    now = time.time()
+    count, since = _get_failures(key) or (0, now)
+    locked = count >= MAX_PIN_FAILURES and now - since < LOCKOUT_SECONDS
+    if locked:
+        raise PermissionError("ใส่ PIN ผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่")
     pin = os.environ.get("ADMIN_PIN", "")
     if pin and hmac.compare_digest(sent.encode(), pin.encode()):
-        with _lock:
-            _failures.pop(key, None)
+        if count:
+            _clear_failures(key)
         return True
-    with _lock:
-        count, since = _failures.get(key, (0, now))
-        if now - since >= LOCKOUT_SECONDS:
-            count, since = 0, now
-        _failures[key] = (count + 1, since)
+    if now - since >= LOCKOUT_SECONDS:
+        count, since = 0, now
+    _set_failures(key, count + 1, since)
     raise PermissionError("PIN แอดมินไม่ถูกต้อง")
 
 

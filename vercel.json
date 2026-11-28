@@ -1,0 +1,6 @@
+{
+  "regions": ["icn1"],
+  "functions": {
+    "app.py": { "maxDuration": 60 }
+  }
+}

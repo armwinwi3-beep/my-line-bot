@@ -114,6 +114,44 @@ class VerifyUserTest(unittest.TestCase):
             self.assertEqual(self.get("Uabc", {"Authorization": "Bearer t"}).status_code, 401)
 
 
+class FakeTable:
+    def __init__(self, rows): self.rows, self.filters, self.op = rows, {}, "select"
+    def select(self, *_): return self
+    def limit(self, *_): return self
+    def eq(self, k, v): self.filters[k] = v; return self
+    def upsert(self, row, on_conflict=None): self.op, self.row = "upsert", row; return self
+    def delete(self): self.op = "delete"; return self
+
+    def execute(self):
+        from types import SimpleNamespace
+        if self.op == "upsert":
+            self.rows[self.row["client_key"]] = dict(self.row)
+            return SimpleNamespace(data=[self.row])
+        key = self.filters.get("client_key")
+        if self.op == "delete":
+            self.rows.pop(key, None)
+            return SimpleNamespace(data=[])
+        return SimpleNamespace(data=[self.rows[key]] if key in self.rows else [])
+
+
+class PinStoreTest(unittest.TestCase):
+    """Wrong-PIN counts kept in the database survive a fresh instance (empty memory)."""
+
+    def test_lockout_survives_new_instance(self):
+        rows = {}
+        db = mock.Mock()
+        db.table.side_effect = lambda name: FakeTable(rows)
+        with mock.patch.object(auth, "_pin_store", return_value=db), mock.patch.dict(os.environ, {"ADMIN_PIN": "1234"}):
+            client = make_app().test_client()
+            for _ in range(auth.MAX_PIN_FAILURES):
+                auth._failures.clear()  # simulate each request on a new instance
+                client.get("/who?user_id=admin", headers={"X-Admin-Pin": "0000"})
+            auth._failures.clear()
+            self.assertEqual(client.get("/who?user_id=admin", headers={"X-Admin-Pin": "1234"}).status_code, 401)
+            self.assertEqual(len(rows), 1)
+            self.assertNotIn(".", next(iter(rows)))  # stored key is a hash, not the IP
+
+
 class RoutesUseVerifyUserTest(unittest.TestCase):
     def test_every_api_route_calls_verify_user(self):
         tree = ast.parse((Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8"))
